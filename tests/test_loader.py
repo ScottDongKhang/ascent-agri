@@ -33,3 +33,22 @@ def test_keeps_ohlcv_columns():
     df = load_contract_csv(FIX)
     for col in ("open", "high", "low", "close", "volume"):
         assert col in df.columns
+
+
+# --- real Barchart export format (the live file uses 'Latest', not 'Last') ----------
+REAL = Path(__file__).parent / "fixtures" / "RMU26_barchart_real.csv"
+
+
+def test_loads_real_barchart_latest_as_close():
+    df = load_contract_csv(REAL)
+    assert "close" in df.columns
+    # 'Latest' column maps to close
+    assert df.loc["2026-06-24", "close"] == pytest.approx(3605.0)
+    assert df.loc["2026-06-22", "close"] == pytest.approx(3542.0)
+
+
+def test_real_barchart_drops_footer_and_keeps_all_data_rows():
+    df = load_contract_csv(REAL)
+    assert len(df) == 5  # 5 data rows, footer line dropped
+    assert df.index.min().date().isoformat() == "2025-01-29"
+    assert df.index.max().date().isoformat() == "2026-06-24"

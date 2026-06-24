@@ -97,7 +97,9 @@ def build_continuous(
     # attach the expiring-leg cumulative factor to each roll row (= cum_factor of expiring i)
     for row in roll_rows:
         row["cumulative_factor"] = cum_factor[row["roll_index"]]
-    roll_table = pd.DataFrame(roll_rows)
+    _ROLL_COLS = ["roll_index", "roll_date", "expiring", "next",
+                  "avg_exp", "avg_next", "ratio", "cumulative_factor"]
+    roll_table = pd.DataFrame(roll_rows, columns=_ROLL_COLS)  # keep schema even with 0 rolls
 
     # --- naive splice + adjusted ------------------------------------------------------
     raw_parts, adj_parts, map_parts = [], [], []

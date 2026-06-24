@@ -25,6 +25,7 @@ _COLMAP = {
     "high": "high",
     "low": "low",
     "last": "close",
+    "latest": "close",   # Barchart's price-history export labels the close 'Latest'
     "close": "close",
     "settle": "close",
     "volume": "volume",

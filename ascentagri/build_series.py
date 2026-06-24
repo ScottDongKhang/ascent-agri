@@ -66,6 +66,14 @@ def main() -> int:
     for sym, s0, s1, n, nan in spans:
         print(f"  {sym:<8}{str(s0):<12}{str(s1):<12}{n:>6}{nan:>11}")
 
+    if len(clist) < 2:
+        print("\n" + "=" * 78)
+        print("FORMAT OK — but only 1 contract loaded, so there are no rolls to compute.")
+        print("The loader parsed it cleanly (see span/rows/NaNs above). Add a 2nd "
+              "consecutive contract\nto start building the continuous series, then re-run.")
+        print("=" * 78)
+        return 0
+
     res = build_continuous(contracts, roll_offset_bd=args.offset, window=args.window)
 
     INTERIM.mkdir(parents=True, exist_ok=True)

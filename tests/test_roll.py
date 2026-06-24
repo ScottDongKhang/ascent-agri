@@ -96,6 +96,17 @@ def test_naive_spliced_still_contains_the_fake_jump():
         assert (adj[d_roll] / adj[d_prev] - 1) == pytest.approx(true_ret, abs=1e-9)
 
 
+def test_single_contract_has_no_rolls_but_keeps_schema():
+    # partial set (one contract): no rolls, adjusted == raw, roll_table empty-with-columns
+    clist, P, contracts = make_fixture()
+    one = {clist[0]: contracts[clist[0]]}
+    res = build_continuous(one, roll_offset_bd=5, window=4)
+    assert len(res.roll_table) == 0
+    for col in ("roll_date", "expiring", "next", "ratio", "cumulative_factor"):
+        assert col in res.roll_table.columns          # schema preserved when empty
+    assert np.allclose(res.adjusted["close"].values, res.raw_spliced["close"].values)
+
+
 def test_intermediates_are_all_present_and_inspectable():
     clist, P, contracts = make_fixture()
     res = build_continuous(contracts, roll_offset_bd=5, window=4)

@@ -1,3 +1,6 @@
+# Secrets — Databento API key etc. (never commit)
+.env
+
 # Python
 __pycache__/
 *.py[cod]
