@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Your manually-downloaded Barchart contract CSVs are personal-use only
+# under Barchart's ToS and must NOT be committed/redistributed.
+data/raw/*.csv
+
+# Generated outputs (reproducible from raw + code)
+data/interim/*.csv
+data/interim/*.parquet
+data/processed/*.csv
+data/processed/*.parquet
+outputs/*.png
+
+# Keep the directory structure and the raw/ instructions
+!data/raw/README.md
+
+# OS
+.DS_Store
