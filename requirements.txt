@@ -3,3 +3,4 @@ numpy>=1.21
 matplotlib>=3.4
 python-dateutil>=2.8
 pytest>=7.0
+databento>=0.60   # optional: API fetch of individual contracts (ascentagri/databento_fetch.py)
