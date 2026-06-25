@@ -17,6 +17,7 @@ data/interim/*.csv
 data/interim/*.parquet
 data/processed/*.csv
 data/processed/*.parquet
+data/processed/PROVENANCE.md
 outputs/*.png
 
 # Keep the directory structure and the raw/ instructions

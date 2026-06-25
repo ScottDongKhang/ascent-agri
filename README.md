@@ -48,6 +48,18 @@ yields ~2 years of history, not more. See **`data/raw/README.md`** for steps + n
 
 Either way, then run `python -m ascentagri.build_series`.
 
+**Dev stand-in (while robusta data is being gathered).** A free, daily, continuous
+*robusta* series does not exist in any compliant programmatic form (Yahoo has no
+downloadable robusta; Stooq is JS-gated; Barchart robusta is paywalled past ~1/day).
+To unblock downstream work, `ascentagri/vendor_fetch.py` pulls **`KC=F` (ICE Arabica
+coffee)** from Yahoo as a clearly-labeled development stand-in — same tidy columns, so
+the real robusta series swaps in later with no code change:
+
+```bash
+python -m ascentagri.vendor_fetch   # -> data/processed/coffee_KCF_yahoo.csv (+ PROVENANCE.md)
+```
+This is **Arabica, not the robusta deliverable** — for building/tuning the pipeline only.
+
 ## Layout
 
 ```
