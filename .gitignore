@@ -32,3 +32,6 @@ site/_build/
 # OS
 .DS_Store
 .gstack/
+
+# Personal outreach drafts — never public
+outreach-drafts/
