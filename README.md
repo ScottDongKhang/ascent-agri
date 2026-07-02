@@ -9,6 +9,24 @@ regime inputs. Research / backtesting only — **not** live trading, and
 This repository is a standalone Cornell CALS application artifact. It does not
 import from or depend on any other project.
 
+## The public monitor (live site)
+
+**https://scottdongkhang.github.io/ascent-agri/** — the *Robusta Coffee
+Monitor*: a daily, model-driven read on coffee markets and Vietnamese growing
+conditions. Current regime posture in plain English, price with regime
+shading, Central Highlands rainfall anomalies, and the BRL/USD driver.
+
+- Rebuilt every weekday by `.github/workflows/update-site.yml` (fetch → build
+  → publish). **Fail-safe:** if any data fetch fails, nothing publishes and
+  the previous page stays live — panels carry their own as-of dates, so the
+  site can go stale but never wrong.
+- Generator: `python site/build_site.py` (reads the caches, never fetches).
+- Analytics: the page carries a [GoatCounter](https://www.goatcounter.com)
+  snippet pointed at `ascent-agri.goatcounter.com`. Claim that code (free,
+  ~2 minutes: sign up → site code `ascent-agri`) to see visitor counts;
+  until then the snippet is a harmless no-op.
+- Feedback from users arrives as GitHub Issues (footer link on the page).
+
 ## Run the demo
 
 ```bash

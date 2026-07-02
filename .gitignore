@@ -24,6 +24,7 @@ outputs/*.jsonl
 outputs/wf_results/
 outputs/backtest/
 .ipynb_checkpoints/
+site/_build/
 
 # Keep the directory structure and the raw/ instructions
 !data/raw/README.md

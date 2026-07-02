@@ -1,0 +1,58 @@
+name: Update Robusta Coffee Monitor
+
+# Fail-safe by construction: the site is published ONLY after a fully
+# successful fetch + build. If Yahoo/Open-Meteo block the runner or anything
+# else fails, the job fails and the previous gh-pages deployment stays live —
+# the page can go stale (its panels carry as-of dates) but never wrong.
+
+on:
+  schedule:
+    - cron: "20 21 * * 1-5"   # 21:20 UTC weekdays, after the US close
+  workflow_dispatch:
+
+permissions:
+  contents: write   # push to gh-pages
+
+concurrency:
+  group: update-site
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch fresh data (no fetch → no publish)
+        run: |
+          python -m ascentagri.vendor_fetch
+          python -m ascentagri.macro_fetch --force
+
+      - name: Build site
+        run: python site/build_site.py
+
+      - name: Sanity-check output
+        run: |
+          test -s site/_build/index.html
+          test -s site/_build/assets/price_regime.png
+          test -s site/_build/assets/weather.png
+          test -s site/_build/assets/brl.png
+          grep -q "Robusta Coffee Monitor" site/_build/index.html
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: site/_build
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "site: daily update"
