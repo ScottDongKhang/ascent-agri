@@ -39,17 +39,22 @@ PROCESSED = ROOT / "data" / "processed"
 
 BRLUSD_PATH = PROCESSED / "brlusd.csv"
 WEATHER_PATH = PROCESSED / "weather_central_highlands.csv"
+WEATHER_BRAZIL_PATH = PROCESSED / "weather_sul_de_minas.csv"
 
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXBZUS"
 
 # Buon Ma Thuot, Dak Lak — heart of the Central Highlands robusta belt
 WEATHER_LAT = 12.68
 WEATHER_LON = 108.04
+# Varginha, Minas Gerais — center of the Sul de Minas arabica belt (the
+# region whose July frosts drive the famous arabica price spikes)
+BRAZIL_LAT = -21.55
+BRAZIL_LON = -45.43
 OPEN_METEO_URL = (
     "https://archive-api.open-meteo.com/v1/archive"
     "?latitude={lat}&longitude={lon}"
     "&start_date={start}&end_date={end}"
-    "&daily=precipitation_sum,temperature_2m_mean&timezone=UTC"
+    "&daily={daily_vars}&timezone=UTC"
 )
 
 DEFAULT_START = "2017-01-01"   # 1y of runway before the earliest price data
@@ -116,24 +121,50 @@ def fetch_brlusd(start: str = DEFAULT_START) -> pd.DataFrame:
         return _fetch_brlusd_yahoo(start)
 
 
-def fetch_weather(start: str = DEFAULT_START, end: str | None = None) -> pd.DataFrame:
-    """Fetch daily precipitation + mean temperature for Buon Ma Thuot.
-    Returns tidy [date, rain_mm, temp_c]."""
+_OM_VAR_RENAME = {
+    "precipitation_sum": "rain_mm",
+    "temperature_2m_mean": "temp_c",
+    "temperature_2m_min": "tmin_c",
+}
+
+
+def fetch_weather_at(lat: float, lon: float, start: str = DEFAULT_START,
+                     end: "str | None" = None,
+                     daily_vars: "tuple[str, ...]" = (
+                         "precipitation_sum", "temperature_2m_mean"),
+                     ) -> pd.DataFrame:
+    """Fetch daily weather at any location from the Open-Meteo archive API.
+    Returns a tidy frame [date, <renamed vars>]."""
     # archive API lags realtime by ~5 days
     end = end or (dt.date.today() - dt.timedelta(days=6)).isoformat()
-    url = OPEN_METEO_URL.format(lat=WEATHER_LAT, lon=WEATHER_LON, start=start, end=end)
+    url = OPEN_METEO_URL.format(lat=lat, lon=lon, start=start, end=end,
+                                daily_vars=",".join(daily_vars))
     payload = json.loads(_http_get(url))
     daily = payload.get("daily", {})
     if not daily.get("time"):
         raise RuntimeError(f"Open-Meteo returned no daily data: {payload}")
-    out = pd.DataFrame({
-        "date": pd.to_datetime(daily["time"]),
-        "rain_mm": daily["precipitation_sum"],
-        "temp_c": daily["temperature_2m_mean"],
-    })
-    out["rain_mm"] = pd.to_numeric(out["rain_mm"], errors="coerce")
-    out["temp_c"] = pd.to_numeric(out["temp_c"], errors="coerce")
+    out = pd.DataFrame({"date": pd.to_datetime(daily["time"])})
+    for var in daily_vars:
+        out[_OM_VAR_RENAME.get(var, var)] = pd.to_numeric(
+            daily[var], errors="coerce")
     return out
+
+
+def fetch_weather(start: str = DEFAULT_START, end: "str | None" = None) -> pd.DataFrame:
+    """Daily precipitation + mean temperature for Buon Ma Thuot (Central
+    Highlands robusta belt). Returns tidy [date, rain_mm, temp_c]."""
+    return fetch_weather_at(WEATHER_LAT, WEATHER_LON, start, end)
+
+
+def fetch_weather_brazil(start: str = DEFAULT_START,
+                         end: "str | None" = None) -> pd.DataFrame:
+    """Daily precipitation + mean/min temperature for Varginha (Sul de Minas
+    arabica belt). tmin_c enables frost-event analysis.
+    Returns tidy [date, rain_mm, temp_c, tmin_c]."""
+    return fetch_weather_at(
+        BRAZIL_LAT, BRAZIL_LON, start, end,
+        daily_vars=("precipitation_sum", "temperature_2m_mean",
+                    "temperature_2m_min"))
 
 
 def load_brlusd() -> pd.Series:
@@ -149,6 +180,19 @@ def load_weather() -> pd.DataFrame:
     if not WEATHER_PATH.exists():
         ensure_caches()
     df = pd.read_csv(WEATHER_PATH, parse_dates=["date"])
+    return df.set_index("date").sort_index()
+
+
+def load_weather_brazil() -> pd.DataFrame:
+    """Load cached Sul de Minas weather (fetches if missing). Used by the
+    weather study only — the daily site workflow does not need it."""
+    if not WEATHER_BRAZIL_PATH.exists():
+        PROCESSED.mkdir(parents=True, exist_ok=True)
+        wx = fetch_weather_brazil()
+        wx.to_csv(WEATHER_BRAZIL_PATH, index=False)
+        print(f"[macro_fetch] wrote {WEATHER_BRAZIL_PATH.name}: {len(wx)} rows "
+              f"({wx['date'].min().date()} -> {wx['date'].max().date()})")
+    df = pd.read_csv(WEATHER_BRAZIL_PATH, parse_dates=["date"])
     return df.set_index("date").sort_index()
 
 

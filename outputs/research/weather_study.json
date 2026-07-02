@@ -1,0 +1,283 @@
+{
+  "params": {
+    "dry_threshold_z": -1.25,
+    "cold_tmin_c": 6.0,
+    "cooldown_days": 30,
+    "horizons_days": [
+      5,
+      21,
+      63
+    ],
+    "n_permutations": 2000,
+    "block_bootstrap": {
+      "n": 1000,
+      "block": 21
+    },
+    "seed": 20260702,
+    "arabica_span": "2018-01-02\u21922026-06-25",
+    "robusta_span": "2025-01-29\u21922026-06-24"
+  },
+  "event_studies": [
+    {
+      "signal": "vn_dry",
+      "target": "arabica",
+      "n_events": 3,
+      "event_dates": [
+        "2018-04-19",
+        "2022-12-27",
+        "2023-02-07"
+      ],
+      "horizons": {
+        "5d": {
+          "n": 3,
+          "mean_fwd_return": 0.01073,
+          "baseline_mean": 0.00307,
+          "excess": 0.00766,
+          "p_value": 0.8,
+          "hit_rate_positive": 0.667
+        },
+        "21d": {
+          "n": 3,
+          "mean_fwd_return": 0.0068,
+          "baseline_mean": 0.01254,
+          "excess": -0.00574,
+          "p_value": 0.9165,
+          "hit_rate_positive": 0.667
+        },
+        "63d": {
+          "n": 3,
+          "mean_fwd_return": -0.00015,
+          "baseline_mean": 0.03919,
+          "excess": -0.03934,
+          "p_value": 0.683,
+          "hit_rate_positive": 0.667
+        }
+      }
+    },
+    {
+      "signal": "vn_dry",
+      "target": "robusta",
+      "n_events": 0,
+      "event_dates": [],
+      "horizons": {
+        "5d": {
+          "n": 0
+        },
+        "21d": {
+          "n": 0
+        },
+        "63d": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "signal": "br_dry",
+      "target": "arabica",
+      "n_events": 4,
+      "event_dates": [
+        "2019-06-17",
+        "2019-08-03",
+        "2019-09-04",
+        "2024-05-18"
+      ],
+      "horizons": {
+        "5d": {
+          "n": 4,
+          "mean_fwd_return": 0.05445,
+          "baseline_mean": 0.00307,
+          "excess": 0.05138,
+          "p_value": 0.0405,
+          "hit_rate_positive": 0.75
+        },
+        "21d": {
+          "n": 4,
+          "mean_fwd_return": 0.06806,
+          "baseline_mean": 0.01254,
+          "excess": 0.05552,
+          "p_value": 0.2515,
+          "hit_rate_positive": 0.75
+        },
+        "63d": {
+          "n": 4,
+          "mean_fwd_return": 0.16097,
+          "baseline_mean": 0.03919,
+          "excess": 0.12178,
+          "p_value": 0.1375,
+          "hit_rate_positive": 1.0
+        }
+      }
+    },
+    {
+      "signal": "br_dry",
+      "target": "robusta",
+      "n_events": 0,
+      "event_dates": [],
+      "horizons": {
+        "5d": {
+          "n": 0
+        },
+        "21d": {
+          "n": 0
+        },
+        "63d": {
+          "n": 0
+        }
+      }
+    },
+    {
+      "signal": "br_cold",
+      "target": "arabica",
+      "n_events": 6,
+      "event_dates": [
+        "2019-07-07",
+        "2020-05-27",
+        "2020-08-26",
+        "2021-07-01",
+        "2022-05-20",
+        "2024-08-11"
+      ],
+      "horizons": {
+        "5d": {
+          "n": 6,
+          "mean_fwd_return": 0.0217,
+          "baseline_mean": 0.00307,
+          "excess": 0.01863,
+          "p_value": 0.356,
+          "hit_rate_positive": 0.667
+        },
+        "21d": {
+          "n": 6,
+          "mean_fwd_return": 0.00436,
+          "baseline_mean": 0.01254,
+          "excess": -0.00819,
+          "p_value": 0.8385,
+          "hit_rate_positive": 0.5
+        },
+        "63d": {
+          "n": 6,
+          "mean_fwd_return": 0.06719,
+          "baseline_mean": 0.03919,
+          "excess": 0.02799,
+          "p_value": 0.6705,
+          "hit_rate_positive": 0.667
+        }
+      }
+    },
+    {
+      "signal": "br_cold",
+      "target": "robusta",
+      "n_events": 0,
+      "event_dates": [],
+      "horizons": {
+        "5d": {
+          "n": 0
+        },
+        "21d": {
+          "n": 0
+        },
+        "63d": {
+          "n": 0
+        }
+      }
+    }
+  ],
+  "lead_lags": [
+    {
+      "signal": "vn_rain_anom",
+      "target": "arabica",
+      "horizons": {
+        "5d": {
+          "n": 2129,
+          "spearman": 0.0516,
+          "ci_lo": -0.0337,
+          "ci_hi": 0.1252
+        },
+        "21d": {
+          "n": 2113,
+          "spearman": 0.0985,
+          "ci_lo": -0.04,
+          "ci_hi": 0.2308
+        },
+        "63d": {
+          "n": 2071,
+          "spearman": 0.2029,
+          "ci_lo": 0.0208,
+          "ci_hi": 0.354
+        }
+      }
+    },
+    {
+      "signal": "vn_rain_anom",
+      "target": "robusta",
+      "horizons": {
+        "5d": {
+          "n": 352,
+          "spearman": -0.0356,
+          "ci_lo": -0.2282,
+          "ci_hi": 0.1576
+        },
+        "21d": {
+          "n": 336,
+          "spearman": -0.0328,
+          "ci_lo": -0.4229,
+          "ci_hi": 0.3118
+        },
+        "63d": {
+          "n": 294,
+          "spearman": 0.1474,
+          "ci_lo": -0.1793,
+          "ci_hi": 0.5201
+        }
+      }
+    },
+    {
+      "signal": "br_rain_anom",
+      "target": "arabica",
+      "horizons": {
+        "5d": {
+          "n": 2129,
+          "spearman": -0.0021,
+          "ci_lo": -0.0988,
+          "ci_hi": 0.0911
+        },
+        "21d": {
+          "n": 2113,
+          "spearman": 0.0057,
+          "ci_lo": -0.1451,
+          "ci_hi": 0.1538
+        },
+        "63d": {
+          "n": 2071,
+          "spearman": -0.1738,
+          "ci_lo": -0.3211,
+          "ci_hi": 0.0079
+        }
+      }
+    },
+    {
+      "signal": "br_rain_anom",
+      "target": "robusta",
+      "horizons": {
+        "5d": {
+          "n": 352,
+          "spearman": -0.0584,
+          "ci_lo": -0.2898,
+          "ci_hi": 0.176
+        },
+        "21d": {
+          "n": 336,
+          "spearman": -0.1703,
+          "ci_lo": -0.5048,
+          "ci_hi": 0.3004
+        },
+        "63d": {
+          "n": 294,
+          "spearman": -0.4,
+          "ci_lo": -0.7661,
+          "ci_hi": 0.0128
+        }
+      }
+    }
+  ]
+}

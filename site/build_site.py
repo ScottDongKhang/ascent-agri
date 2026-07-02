@@ -205,6 +205,76 @@ def daily_brief(s: MonitorState) -> str:
     return " ".join(parts)
 
 
+def _brief_state_at(s: MonitorState, date: pd.Timestamp) -> Optional[MonitorState]:
+    """Reconstruct the (small) subset of MonitorState that daily_brief needs,
+    as of a historical trading date. Purely from already-computed history —
+    no refits, no fetches."""
+    close = s.close.loc[:date]
+    if len(close) < 23:
+        return None
+    sig = s.signals.loc[:date]
+    if sig.empty:
+        return None
+    last = sig.iloc[-1]
+    label = str(last["label"])
+    dwell = int(last.get("dwell_days", 0))
+    posture = compute_posture_from_regime(
+        asof=str(date.date()), regime_label=label, probs={},
+        days_in_regime=dwell, min_confidence=0.0)
+    panel = s.feature_panel.loc[:date]
+    rain = panel["rain_anom_30d"].dropna() if "rain_anom_30d" in panel else pd.Series(dtype=float)
+    brl = s.brl.loc[:date]
+    return MonitorState(
+        close=close, signals=sig, feature_panel=panel, brl=brl,
+        weather=s.weather, posture=posture, label=label, dwell=dwell,
+        price=float(close.iloc[-1]),
+        chg_1w=float(close.iloc[-1] / close.iloc[-6] - 1),
+        chg_1m=float(close.iloc[-1] / close.iloc[-22] - 1),
+        rain_z=float(rain.iloc[-1]) if len(rain) else None,
+        dry_frac=None,
+        brl_chg_21d=float(brl.iloc[-1] / brl.iloc[-22] - 1) if len(brl) > 22 else None,
+        price_asof=str(date.date()), weather_asof="", brl_asof="",
+    )
+
+
+def render_feed(s: MonitorState, site_url: str, n: int = 10) -> str:
+    """RSS 2.0 feed of the last `n` trading-day briefs (stable date GUIDs)."""
+    from email.utils import format_datetime
+    from xml.sax.saxutils import escape
+
+    items = []
+    for date in s.close.index[-n:]:
+        st = _brief_state_at(s, date)
+        if st is None:
+            continue
+        brief = escape(daily_brief(st))
+        d = date.to_pydatetime().replace(hour=21, minute=30, tzinfo=timezone.utc)
+        items.append(
+            f"    <item>\n"
+            f"      <title>Coffee monitor — {date.date()} — "
+            f"{escape(REGIME_WORDS.get(st.label, st.label))}</title>\n"
+            f"      <link>{site_url}</link>\n"
+            f"      <guid isPermaLink=\"false\">ascent-agri-{date.date()}</guid>\n"
+            f"      <pubDate>{format_datetime(d)}</pubDate>\n"
+            f"      <description>{brief}</description>\n"
+            f"    </item>"
+        )
+    now = format_datetime(datetime.now(timezone.utc))
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        "  <channel>\n"
+        "    <title>Robusta Coffee Monitor</title>\n"
+        f"    <link>{site_url}</link>\n"
+        "    <description>Daily model-driven read on coffee markets and "
+        "Vietnamese Central Highlands growing conditions.</description>\n"
+        f"    <lastBuildDate>{now}</lastBuildDate>\n"
+        + "\n".join(reversed(items)) + "\n"
+        "  </channel>\n"
+        "</rss>\n"
+    )
+
+
 # ── charts ──────────────────────────────────────────────────────────────────
 
 def _save(fig, path: Path):
@@ -303,6 +373,7 @@ def render_html(s: MonitorState, brief: str) -> str:
 <meta name="description" content="A daily, model-driven read on coffee markets and Vietnamese robusta growing conditions: market regime, Central Highlands rainfall anomalies, and the Brazilian real.">
 <meta property="og:title" content="Robusta Coffee Monitor">
 <meta property="og:description" content="Daily market regime, Central Highlands weather anomalies, and currency pressure — an open agricultural market-intelligence project.">
+<link rel="alternate" type="application/rss+xml" title="Robusta Coffee Monitor — daily brief" href="feed.xml">
 <style>
   :root {{
     --bg: {PAGE_BG}; --surface: {SURFACE}; --ink: {INK}; --muted: {MUTED};
@@ -430,6 +501,24 @@ def render_html(s: MonitorState, brief: str) -> str:
 </section>
 
 <section class="methods">
+  <h2>Research</h2>
+  <p>The question behind this page — <em>do growing-region weather anomalies
+  actually predict coffee futures returns?</em> — is tested properly in the
+  project's working paper: an event study with a-priori definitions,
+  permutation inference, and a built-in placebo structure (each region's
+  weather vs the <em>other</em> region's crop). Headline: Brazilian dry
+  spells precede arabica rallies with the right sign at every horizon
+  (+5.1pp over 5 days, n=4, uncorrected p=0.04); the placebo is null; the
+  Vietnam→robusta test is still data-limited — and the famous 2021 frost
+  exposed a real flaw in threshold-based event definitions.</p>
+  <ul>
+    <li><a href="assets/weather-and-coffee-returns.pdf">Read the paper
+        (PDF)</a> · <a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/docs/research/weather-and-coffee-returns.md">markdown
+        + reproduction commands</a></li>
+  </ul>
+</section>
+
+<section class="methods">
   <h2>Methods, honestly</h2>
   <p>This monitor is the public face of an open research project: a
   single-instrument port of a multi-agent equity platform, rebuilt for
@@ -458,6 +547,7 @@ def render_html(s: MonitorState, brief: str) -> str:
   <p><strong style="color:var(--ink)">This is not investment advice.</strong>
   An educational, open-source agricultural market-intelligence project.</p>
   <p>Built by Scott Dong ·
+  <a href="feed.xml">RSS daily brief</a> ·
   <a href="https://github.com/ScottDongKhang/ascent-agri/issues">suggest a
   feature or report something wrong</a> · last updated {updated}</p>
 </footer>
@@ -497,8 +587,15 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     (out_dir / "index.html").write_text(render_html(state, brief))
     (out_dir / ".nojekyll").write_text("")
 
+    site_url = "https://scottdongkhang.github.io/ascent-agri/"
+    (out_dir / "feed.xml").write_text(render_feed(state, site_url))
+
+    paper = ROOT / "docs" / "research" / "weather-and-coffee-returns.pdf"
+    if paper.exists():
+        shutil.copy(paper, assets / paper.name)
+
     print(f"[site] brief: {brief}")
-    print(f"[site] wrote {out_dir / 'index.html'}")
+    print(f"[site] wrote {out_dir / 'index.html'} (+feed.xml, paper={paper.exists()})")
     return out_dir
 
 

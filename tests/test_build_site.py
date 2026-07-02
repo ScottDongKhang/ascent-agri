@@ -55,6 +55,27 @@ def test_html_has_required_sections(built):
         assert required in html, f"missing: {required!r}"
 
 
+def test_feed_exists_and_is_valid_rss(built):
+    import xml.etree.ElementTree as ET
+    feed = built / "feed.xml"
+    assert feed.exists()
+    root = ET.fromstring(feed.read_text())
+    assert root.tag == "rss"
+    items = root.findall("./channel/item")
+    assert len(items) >= 5
+    descs = [i.findtext("description") or "" for i in items]
+    assert any("Coffee futures closed" in d for d in descs)
+    guids = [i.findtext("guid") for i in items]
+    assert len(guids) == len(set(guids)), "GUIDs must be unique"
+
+
+def test_paper_served_and_linked(built):
+    html = (built / "index.html").read_text()
+    assert "Research" in html
+    if (built / "assets" / "weather-and-coffee-returns.pdf").exists():
+        assert "assets/weather-and-coffee-returns.pdf" in html
+
+
 def test_posture_is_known_value(built):
     html = (built / "index.html").read_text()
     assert any(w in html for w in

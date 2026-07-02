@@ -25,7 +25,25 @@ shading, Central Highlands rainfall anomalies, and the BRL/USD driver.
   snippet pointed at `ascent-agri.goatcounter.com`. Claim that code (free,
   ~2 minutes: sign up → site code `ascent-agri`) to see visitor counts;
   until then the snippet is a harmless no-op.
-- Feedback from users arrives as GitHub Issues (footer link on the page).
+- Feedback from users arrives as GitHub Issues (footer link on the page);
+  daily briefs are also available as an RSS feed (`feed.xml`).
+
+## Research
+
+**[Do growing-region weather anomalies predict coffee futures returns?](docs/research/weather-and-coffee-returns.md)**
+([PDF](docs/research/weather-and-coffee-returns.pdf)) — an event study with
+a-priori definitions, Monte-Carlo permutation inference, and a built-in
+placebo structure (Vietnam weather × robusta, Brazil weather × arabica, and
+the cross-pairs as placebos). Headlines: Brazilian dry events precede
+arabica rallies with the right sign at every horizon (+5.1pp/5d, n=4,
+uncorrected p=0.04 — does not survive multiple-comparisons correction, and
+says so); the placebo is null; the primary Vietnam→robusta test is
+data-limited until the contract backfill lands; and the July 2021 frost
+(+33.8%/5d) was absorbed by the event-cooldown rule — a documented lesson in
+event-definition risk. Reproduce with
+`python -m ascentagri.research.weather_study`.
+
+Project critical path to the Nov 1 application: `docs/ROADMAP-to-Nov-1.md`.
 
 ## Run the demo
 
