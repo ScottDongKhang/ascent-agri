@@ -76,6 +76,33 @@ def test_paper_served_and_linked(built):
         assert "assets/weather-and-coffee-returns.pdf" in html
 
 
+def test_ledger_section_present(built):
+    html = (built / "index.html").read_text()
+    assert "The ledger — the model in public" in html
+    assert "data/ledger/forecasts.jsonl" in html
+
+
+def test_ledger_chart_and_section_mature_path(tmp_path):
+    """With a synthetic mature ledger, the chart renders and the section
+    carries the scored stats."""
+    import numpy as np
+    import pandas as pd
+    entries = [{"schema": 1, "date": str(d.date()), "close": float(c),
+                "exposure": 0.5, "label": "calm_bull", "risk_multiplier": 1.0,
+                "series": "TEST"}
+               for d, c in zip(pd.bdate_range("2026-01-01", periods=30),
+                               100 * np.exp(np.cumsum(
+                                   np.random.default_rng(1).normal(0, 0.01, 30))))]
+    from ascentagri.ledger import score_ledger
+    score = score_ledger(entries)
+    assert score.n_scored_days >= 10
+    out = tmp_path / "ledger.png"
+    assert build_site.chart_ledger(score, out) is True
+    assert out.stat().st_size > 5_000
+    html = build_site.render_ledger_section(score, has_chart=True)
+    assert "scored days" in html and "assets/ledger.png" in html
+
+
 def test_posture_is_known_value(built):
     html = (built / "index.html").read_text()
     assert any(w in html for w in

@@ -45,6 +45,26 @@ event-definition risk. Reproduce with
 
 Project critical path to the Nov 1 application: `docs/ROADMAP-to-Nov-1.md`.
 
+## Daily operations (the Ascent pattern)
+
+The repository runs itself on the parent platform's daily-agent discipline:
+
+| Cadence | Workflow | What it does |
+|---|---|---|
+| Weekdays 21:20 UTC | `update-site.yml` | fetch → **append the day's ledger entry** (committed to main) → rebuild → publish |
+| Mondays 22:00 UTC | `weekly-research.yml` | re-run the weather study + walk-forward on the newest data, commit refreshed artifacts |
+
+**The ledger** (`data/ledger/forecasts.jsonl`) is the project's public,
+append-only track record: every weekday the model's regime call and target
+exposure are written down *before* the outcome is known, and scored later
+using only prices recorded in the ledger itself (1-day execution delay).
+Entries are never edited — `python -m ascentagri.ledger score` reproduces
+the track record from the committed file alone. The live site renders it in
+"The ledger — the model in public."
+
+Want to contribute (new growing regions, new crops, weather composites)?
+See `CONTRIBUTING.md`.
+
 ## Run the demo
 
 ```bash

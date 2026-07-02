@@ -1,0 +1,77 @@
+name: Weekly research refresh
+
+# Every Monday: re-run the weather study and the walk-forward evaluation on
+# the newest data and commit the refreshed artifacts. The estimates sharpen
+# mechanically as event counts and price history grow — no parameters are
+# ever retuned by this job (see docs/ROADMAP-to-Nov-1.md, "What NOT to do").
+
+on:
+  schedule:
+    - cron: "0 22 * * 1"   # Mondays 22:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-research
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch fresh data
+        run: |
+          python -m ascentagri.vendor_fetch
+          python -m ascentagri.macro_fetch --force
+
+      - name: Re-run the weather study
+        run: python -m ascentagri.research.weather_study
+
+      - name: Re-run the walk-forward evaluation
+        run: |
+          python - <<'PY'
+          import json, logging, warnings
+          logging.basicConfig(level=logging.ERROR)
+          warnings.filterwarnings("ignore")
+          import pandas as pd
+          from ascentagri.config import get_config
+          from ascentagri.research.walk_forward_runner import run_walk_forward
+          close_df = pd.read_csv("data/processed/coffee_KCF_yahoo.csv",
+                                 parse_dates=["date"]).set_index("date").sort_index()
+          from ascentagri.macro_fetch import load_brlusd, load_weather
+          res = run_walk_forward(close_df["close"], open_prices=close_df.get("open"),
+                                 brl_usd=load_brlusd(), weather=load_weather(),
+                                 config=get_config(), verbose=False)
+          out = dict(res.report)
+          out["fold_summaries"] = res.fold_summaries
+          with open("outputs/research/wf_weekly.json", "w") as f:
+              json.dump(out, f, indent=2, default=str)
+          print("WF weekly:", {k: out[k] for k in
+                ("cagr", "arithmetic_sharpe", "wfe", "n_folds", "n_failed_folds")})
+          PY
+
+      - name: Commit refreshed artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/research/weather_study.json outputs/research/wf_weekly.json
+          if ! git diff --cached --quiet; then
+            git commit -m "research: weekly refresh $(date -u +%F)"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          else
+            echo "No changes in research artifacts."
+          fi

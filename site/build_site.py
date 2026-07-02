@@ -36,6 +36,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from ascentagri.ledger import LedgerScore, read_ledger, score_ledger  # noqa: E402
 from ascentagri.regime.engine import RegimeEngine                 # noqa: E402
 from ascentagri.regime.features import RegimeFeatureBuilder      # noqa: E402
 from ascentagri.regime.posture import compute_posture_from_regime  # noqa: E402
@@ -275,6 +276,62 @@ def render_feed(s: MonitorState, site_url: str, n: int = 10) -> str:
     )
 
 
+LEDGER_CHART_MIN_DAYS = 10
+
+
+def chart_ledger(score: LedgerScore, out: Path) -> bool:
+    """Scored track record chart. Returns False (no chart) while the ledger
+    is younger than LEDGER_CHART_MIN_DAYS scored days."""
+    if score.n_scored_days < LEDGER_CHART_MIN_DAYS:
+        return False
+    strat_eq = (1 + score.strategy_daily).cumprod()
+    bh_eq = (1 + score.bh_daily).cumprod()
+    fig, ax = plt.subplots(figsize=(9.6, 3.6))
+    ax.plot(strat_eq.index, strat_eq.values, color=BLUE, lw=1.6,
+            label="model (public ledger, 1-day delay)")
+    ax.plot(bh_eq.index, bh_eq.values, color=AQUA, lw=1.6,
+            label="buy & hold")
+    ax.set_ylabel("growth of $1")
+    ax.legend(loc="upper left", fontsize=8.5)
+    ax.xaxis.set_major_formatter(
+        mdates.ConciseDateFormatter(mdates.AutoDateLocator()))
+    _save(fig, out)
+    return True
+
+
+def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
+    raw_url = ("https://github.com/ScottDongKhang/ascent-agri/blob/main/"
+               "data/ledger/forecasts.jsonl")
+    if score.n_entries == 0:
+        body = "<p class=\"asof\">The ledger opens with the next daily run.</p>"
+    elif score.n_scored_days == 0:
+        body = (f'<p class="asof">Ledger opened {score.start} · '
+                f'{score.n_entries} entr{"y" if score.n_entries == 1 else "ies"} '
+                f'so far — the scored track record appears here automatically '
+                f'once enough days accumulate.</p>')
+    else:
+        chart_html = ('<figure><img src="assets/ledger.png" '
+                      'alt="Ledger track record vs buy and hold"></figure>'
+                      if has_chart else "")
+        body = (f'<p class="asof">{score.n_entries} entries · '
+                f'{score.n_scored_days} scored days ({score.start} → {score.end}) · '
+                f'model {score.strategy_return:+.2%} vs buy-and-hold '
+                f'{score.bh_return:+.2%} · mean exposure '
+                f'{score.mean_exposure:.2f}</p>{chart_html}')
+    return f"""
+<section class="methods">
+  <h2>The ledger — the model in public</h2>
+  <p>Every weekday the pipeline writes down what the model believes —
+  regime call and target exposure — <em>before</em> the outcome is known,
+  and commits it to the repository. Entries are never edited or deleted;
+  scoring uses only the prices recorded in the ledger itself, with a 1-day
+  execution delay. If the model is wrong, this section says so forever.</p>
+  {body}
+  <ul><li><a href="{raw_url}">Inspect the raw ledger on GitHub</a></li></ul>
+</section>
+"""
+
+
 # ── charts ──────────────────────────────────────────────────────────────────
 
 def _save(fig, path: Path):
@@ -352,7 +409,7 @@ def chart_brl(s: MonitorState, out: Path, lookback_days: int = 730):
 
 # ── page ────────────────────────────────────────────────────────────────────
 
-def render_html(s: MonitorState, brief: str) -> str:
+def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
     p = s.posture
     accent = "#" + p.posture_color
     updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -500,6 +557,8 @@ def render_html(s: MonitorState, brief: str) -> str:
   </figure>
 </section>
 
+{ledger_html}
+
 <section class="methods">
   <h2>Research</h2>
   <p>The question behind this page — <em>do growing-region weather anomalies
@@ -584,7 +643,12 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     chart_brl(state, assets / "brl.png")
 
     brief = daily_brief(state)
-    (out_dir / "index.html").write_text(render_html(state, brief))
+
+    ledger_score = score_ledger(read_ledger())
+    has_ledger_chart = chart_ledger(ledger_score, assets / "ledger.png")
+    ledger_html = render_ledger_section(ledger_score, has_ledger_chart)
+
+    (out_dir / "index.html").write_text(render_html(state, brief, ledger_html))
     (out_dir / ".nojekyll").write_text("")
 
     site_url = "https://scottdongkhang.github.io/ascent-agri/"
