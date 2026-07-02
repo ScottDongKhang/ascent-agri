@@ -30,6 +30,12 @@ do**. Dated critical path below. Automated pieces keep running on their own.
       Discord coffee servers, family/community networks in Vietnam if
       applicable. Goal: first 50 real visitors + first GitHub issue from a
       stranger.
+- [ ] **Begin corporate outreach** — the playbook, targets, and email
+      template are in `docs/OUTREACH.md`. The data product they consume:
+      `api/latest.json`, `api/history.csv`, the RSS feed (CC BY 4.0, free
+      commercial use with attribution). Log every send/reply; the evidence
+      checklist in the playbook defines when you may claim "X users depend
+      on my data."
 
 ## August (science month)
 

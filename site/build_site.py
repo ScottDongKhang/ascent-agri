@@ -276,6 +276,67 @@ def render_feed(s: MonitorState, site_url: str, n: int = 10) -> str:
     )
 
 
+API_SCHEMA_VERSION = 1
+API_ATTRIBUTION = ("Regime labels, risk multipliers and anomalies computed by "
+                   "ascent-agri (github.com/ScottDongKhang/ascent-agri). "
+                   "Underlying inputs: Yahoo Finance, Open-Meteo (CC BY 4.0).")
+API_LICENSE = "CC BY 4.0 (derived data); attribution required"
+
+
+def render_api_latest(s: MonitorState, brief: str) -> str:
+    """Machine-readable snapshot of today's model view. DERIVED data only —
+    labels, multipliers and anomalies this project computes; no raw market
+    data is redistributed."""
+    import json
+    payload = {
+        "schema_version": API_SCHEMA_VERSION,
+        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "as_of": {
+            "price": s.price_asof,
+            "weather": s.weather_asof,
+            "fx": s.brl_asof,
+        },
+        "regime": {
+            "label": s.label,
+            "posture": s.posture.posture,
+            "risk_multiplier": s.posture.risk_multiplier,
+            "sessions_in_regime": max(s.dwell, 1),
+        },
+        "market": {
+            "chg_1w": round(s.chg_1w, 5),
+            "chg_1m": round(s.chg_1m, 5),
+            "series": "ICE arabica benchmark (robusta series in assembly)",
+        },
+        "growing_conditions": {
+            "location": "Buon Ma Thuot, Dak Lak, Vietnam (12.68N, 108.04E)",
+            "rain_anom_30d_z": round(s.rain_z, 3) if s.rain_z is not None else None,
+            "dry_frac_30d": round(s.dry_frac, 3) if s.dry_frac is not None else None,
+        },
+        "fx": {
+            "brl_usd_chg_21d": round(s.brl_chg_21d, 5)
+            if s.brl_chg_21d is not None else None,
+        },
+        "brief": brief,
+        "attribution": API_ATTRIBUTION,
+        "license": API_LICENSE,
+        "docs": "https://scottdongkhang.github.io/ascent-agri/#data",
+    }
+    return json.dumps(payload, indent=2)
+
+
+def render_api_history(s: MonitorState) -> str:
+    """Full daily history of the model's derived series as CSV:
+    date, regime label, risk multiplier, rainfall anomaly, dry fraction."""
+    df = pd.DataFrame(index=s.signals.index)
+    df["label"] = s.signals["label"]
+    df["risk_multiplier"] = s.signals["risk_multiplier"]
+    for col in ["rain_anom_30d", "dry_frac_30d"]:
+        if col in s.feature_panel.columns:
+            df[col] = s.feature_panel[col].reindex(df.index).round(4)
+    df.index.name = "date"
+    return df.to_csv(date_format="%Y-%m-%d")
+
+
 LEDGER_CHART_MIN_DAYS = 10
 
 
@@ -559,6 +620,28 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
 
 {ledger_html}
 
+<section class="methods" id="data">
+  <h2>Data &amp; API</h2>
+  <p>Organizations and builders can consume this monitor programmatically —
+  everything below is regenerated with each daily run, versioned, and free
+  under CC BY 4.0 (attribution required). Derived series only: regime labels,
+  risk multipliers and weather anomalies computed by this project.</p>
+  <ul>
+    <li><a href="api/latest.json"><code>api/latest.json</code></a> — today's
+        regime, posture, exposure guide, growing-condition anomalies, and the
+        daily brief (stable schema, versioned).</li>
+    <li><a href="api/history.csv"><code>api/history.csv</code></a> — the full
+        daily history of regime labels, risk multipliers and rainfall
+        anomalies.</li>
+    <li><a href="feed.xml"><code>feed.xml</code></a> — the daily brief as RSS.</li>
+    <li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">the
+        public ledger</a> — the model's append-only, scoreable track record.</li>
+  </ul>
+  <p>Using this in your shop or newsletter? <a
+  href="https://github.com/ScottDongKhang/ascent-agri/issues">Open an issue</a>
+  or email — custom growing regions can be added on request.</p>
+</section>
+
 <section class="methods">
   <h2>Research</h2>
   <p>The question behind this page — <em>do growing-region weather anomalies
@@ -604,7 +687,9 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
   this project. Panels carry their own as-of dates; the page rebuilds only
   after a fully successful data refresh, so it can go stale but not wrong.</p>
   <p><strong style="color:var(--ink)">This is not investment advice.</strong>
-  An educational, open-source agricultural market-intelligence project.</p>
+  An educational, open-source agricultural market-intelligence project.
+  Code MIT-licensed; derived data (regime labels, anomalies, briefs)
+  CC BY 4.0 — free to use with attribution.</p>
   <p>Built by Scott Dong ·
   <a href="feed.xml">RSS daily brief</a> ·
   <a href="https://github.com/ScottDongKhang/ascent-agri/issues">suggest a
@@ -653,6 +738,11 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
 
     site_url = "https://scottdongkhang.github.io/ascent-agri/"
     (out_dir / "feed.xml").write_text(render_feed(state, site_url))
+
+    api_dir = out_dir / "api"
+    api_dir.mkdir(parents=True, exist_ok=True)
+    (api_dir / "latest.json").write_text(render_api_latest(state, brief))
+    (api_dir / "history.csv").write_text(render_api_history(state))
 
     paper = ROOT / "docs" / "research" / "weather-and-coffee-returns.pdf"
     if paper.exists():

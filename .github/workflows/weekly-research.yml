@@ -63,11 +63,52 @@ jobs:
                 ("cagr", "arithmetic_sharpe", "wfe", "n_folds", "n_failed_folds")})
           PY
 
+      - name: Snapshot usage evidence (GitHub traffic + stars)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def api(path):
+              req = urllib.request.Request(
+                  f"https://api.github.com/repos/ScottDongKhang/ascent-agri{path}",
+                  headers={"Authorization": f"token {os.environ['GH_TOKEN']}",
+                           "Accept": "application/vnd.github+json"})
+              return json.loads(urllib.request.urlopen(req, timeout=30).read())
+
+          views = api("/traffic/views")
+          clones = api("/traffic/clones")
+          repo = api("")
+          entry = {
+              "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+              "views_14d": views.get("count", 0),
+              "unique_visitors_14d": views.get("uniques", 0),
+              "clones_14d": clones.get("count", 0),
+              "unique_cloners_14d": clones.get("uniques", 0),
+              "stars": repo.get("stargazers_count", 0),
+              "watchers": repo.get("subscribers_count", 0),
+              "forks": repo.get("forks_count", 0),
+          }
+          p = Path("data/ledger/traffic.jsonl")
+          p.parent.mkdir(parents=True, exist_ok=True)
+          existing = [json.loads(l) for l in p.read_text().splitlines()] if p.exists() else []
+          if any(e["date"] == entry["date"] for e in existing):
+              print("traffic snapshot for today already recorded")
+          else:
+              with open(p, "a") as f:
+                  f.write(json.dumps(entry, sort_keys=True) + "\n")
+              print("traffic snapshot:", entry)
+          PY
+
       - name: Commit refreshed artifacts
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add outputs/research/weather_study.json outputs/research/wf_weekly.json
+          git add outputs/research/weather_study.json outputs/research/wf_weekly.json \
+                  data/ledger/traffic.jsonl
           if ! git diff --cached --quiet; then
             git commit -m "research: weekly refresh $(date -u +%F)"
             git pull --rebase origin main

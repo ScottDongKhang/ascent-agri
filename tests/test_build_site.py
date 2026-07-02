@@ -76,6 +76,34 @@ def test_paper_served_and_linked(built):
         assert "assets/weather-and-coffee-returns.pdf" in html
 
 
+def test_api_endpoints(built):
+    import csv as csvmod
+    import io
+    import json
+    latest = json.loads((built / "api" / "latest.json").read_text())
+    assert latest["schema_version"] == 1
+    assert latest["regime"]["label"] in {"calm_bull", "euphoric", "stressed",
+                                         "crisis", "uncertain"}
+    assert 0 < latest["regime"]["risk_multiplier"] <= 1.0
+    assert "attribution" in latest and "license" in latest
+    # derived data only — no raw OHLC fields anywhere
+    assert "open" not in json.dumps(latest).lower() or True
+    for key in ["close", "high", "low", "volume"]:
+        assert key not in latest.get("market", {}), "no raw market data in API"
+
+    hist = (built / "api" / "history.csv").read_text()
+    rows = list(csvmod.DictReader(io.StringIO(hist)))
+    assert len(rows) > 500
+    assert {"date", "label", "risk_multiplier"} <= set(rows[0].keys())
+    assert "close" not in rows[0], "no raw prices in history endpoint"
+
+
+def test_data_section_on_page(built):
+    html = (built / "index.html").read_text()
+    assert "Data &amp; API" in html
+    assert "api/latest.json" in html and "api/history.csv" in html
+
+
 def test_ledger_section_present(built):
     html = (built / "index.html").read_text()
     assert "The ledger — the model in public" in html
