@@ -1,7 +1,25 @@
+# core
 pandas>=1.3
 numpy>=1.21
 matplotlib>=3.4
 python-dateutil>=2.8
 pytest>=7.0
-databento>=0.60   # optional: API fetch of individual contracts (ascentagri/databento_fetch.py)
-yfinance>=0.2     # optional: free Yahoo dev stand-in series (ascentagri/vendor_fetch.py)
+
+# regime model (HMM / Markov-switching) + PCA
+scikit-learn>=1.3
+hmmlearn>=0.3
+statsmodels>=0.14
+
+# structural break detection (regime/breaks.py degrades gracefully without it,
+# but it is cheap and ships wheels)
+ruptures>=1.1
+
+# data: Yahoo fetches — KC=F dev stand-in + BRL=X fallback for BRL/USD
+yfinance>=0.2
+
+# notebook: run demo.ipynb (kernel + headless execution)
+ipykernel>=6.0
+nbconvert>=7.0
+
+# optional: API fetch of individual robusta contracts (ascentagri/databento_fetch.py)
+databento>=0.60

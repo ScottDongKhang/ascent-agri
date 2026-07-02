@@ -1,103 +1,130 @@
 # ascent-agri
 
-A rigorous, backtested case study applying **regime detection + multi-agent debate**
-to **ICE Robusta Coffee futures** (Vietnamese robusta benchmark). Research / backtesting
-only — **not** live trading.
+A rigorous, backtested case study applying **regime detection + systematic
+position sizing** to **ICE Robusta Coffee futures** (the Vietnamese robusta
+benchmark), with **BRL/USD** and **Vietnam Central Highlands weather** as
+regime inputs. Research / backtesting only — **not** live trading, and
+**long-only by design** (the score-to-position mapping never shorts coffee).
 
-This repository is a standalone Cornell CALS application artifact. It does not import
-from or depend on any other project.
+This repository is a standalone Cornell CALS application artifact. It does not
+import from or depend on any other project.
 
-## What this session built
-
-The **data foundation**: a clean, roll-adjusted *continuous* front-month price series
-for ICE Robusta Coffee, spliced from individual expired contracts using **proportional
-(ratio) back-adjustment**. Everything downstream (regime model, debate layer) consumes
-this series, so it has to be honest first.
-
-## Why roll adjustment matters
-
-Robusta contracts expire every 2 months (delivery months Jan/Mar/May/Jul/Sep/Nov —
-6 per year). No single contract trades for more than ~2 years. To get long history you
-splice many contracts together. Naively concatenating them injects a fake price jump at
-every roll, caused by the shape of the futures curve (contango/backwardation), not by
-the market. Left uncorrected, a regime model hallucinates a "regime change" every
-~2 months. We remove these jumps with ratio adjustment, which preserves percentage
-returns across each splice exactly — and returns are what the regime model consumes.
-
-## Data acquisition — two compliant paths into `data/raw/`
-
-Both paths produce the same thing: per-contract OHLCV CSVs named `RM<code><yy>.csv` in
-`data/raw/`. Nothing downstream changes.
-
-**Path 1 — Databento API (recommended).** Compliant programmatic access (an API, not
-scraping). New accounts get **$125 in promo credits**; daily OHLCV for the whole chain
-costs cents. Reaches further back than Barchart's free tier. Individual contracts, our
-exact granularity.
+## Run the demo
 
 ```bash
-export DATABENTO_API_KEY=db-xxxxxxxx
-python -m ascentagri.databento_fetch --list   # coverage + cost + real symbols (free metadata)
-python -m ascentagri.databento_fetch          # writes RM*.csv into data/raw/
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pytest -q                                # 120 tests: data layer + full pipeline
+
+python demo.py                           # full walk-forward on the stand-in series
+python demo.py --series robusta          # the real robusta series (thin, see below)
+
+jupyter nbconvert --to notebook --execute --inplace demo.ipynb   # headless
+# …or just open demo.ipynb and Run All (it ships with executed outputs)
 ```
 
-**Path 2 — manual Barchart download.** We do **not** scrape Barchart (ToS prohibits
-automated extraction; `robots.txt` disallows the `/proxies/` CSV endpoint). The compliant
-route is to **hand-download** each contract's CSV from the web UI and drop it in
-`data/raw/`. Note the **free tier only serves ~2 years prior to today**, so this path
-yields ~2 years of history, not more. See **`data/raw/README.md`** for steps + naming.
+`demo.py` runs the whole pipeline from the command line — data → regime engine
+→ alpha stack → long-only positions → walk-forward out-of-sample backtest —
+and prints CAGR, Sharpe, max drawdown, and walk-forward efficiency vs
+buy-and-hold, writing artifacts to `outputs/`. `demo.ipynb` walks the same
+pipeline with charts: the regime overlay on price, the BRL/USD and weather
+features, sleeve scores and exposure, equity vs buy-and-hold, and the
+walk-forward report. First run fetches BRL/USD + weather into
+`data/processed/` (network needed once; cached after).
 
-Either way, then run `python -m ascentagri.build_series`.
+## Data sources — and their honest limitations
 
-**Dev stand-in (while robusta data is being gathered).** A free, daily, continuous
-*robusta* series does not exist in any compliant programmatic form (Yahoo has no
-downloadable robusta; Stooq is JS-gated; Barchart robusta is paywalled past ~1/day).
-To unblock downstream work, `ascentagri/vendor_fetch.py` pulls **`KC=F` (ICE Arabica
-coffee)** from Yahoo as a clearly-labeled development stand-in — same tidy columns, so
-the real robusta series swaps in later with no code change:
+| Input | Source | Notes |
+|---|---|---|
+| Robusta continuous series | hand-built from per-contract CSVs via ratio roll-adjustment | **currently 1 contract (RMU26, ~17 months)** — see below |
+| Coffee dev stand-in | Yahoo `KC=F` (ICE **Arabica**) via yfinance | 2018–2026; labeled substitute, NOT the robusta deliverable |
+| BRL/USD | FRED `DEXBZUS`, **fallback Yahoo `BRL=X`** | FRED was unreachable from the build network, so the cache was built from the Yahoo fallback (same USD/BRL orientation); the fetcher tries FRED first every time |
+| Growing-region weather | Open-Meteo Historical Weather API | daily rain/temp at Buon Ma Thuot, Dak Lak (12.68 N, 108.04 E) — free, keyless |
 
-```bash
-python -m ascentagri.vendor_fetch   # -> data/processed/coffee_KCF_yahoo.csv (+ PROVENANCE.md)
-```
-This is **Arabica, not the robusta deliverable** — for building/tuning the pipeline only.
+**The robusta data bottleneck.** Only 1 of ~13 needed contracts has been
+downloaded, so the real series spans ~17 months and supports only ~2
+walk-forward folds. The Databento fetcher (`python -m ascentagri.databento_fetch`)
+can backfill the full chain for cents once a `DATABENTO_API_KEY` exists (none
+was available at build time), or contracts can be hand-downloaded from Barchart
+(`data/raw/README.md`). **Every result on the robusta series is therefore
+provisional**; the main demonstration runs on the arabica stand-in, loudly
+labeled. Nothing downstream changes when real contracts arrive — rebuild with
+`python -m ascentagri.build_series` and rerun.
+
+**Execution convention.** The robusta continuous series is close-only, so
+rebalance trades execute at the t+1 close (signal at t). The stand-in has real
+opens, which the engine uses (signal at t close, execution at t+1 open).
+
+## What the demo actually shows (read this before quoting numbers)
+
+On the stand-in (26 folds, 2020–2026 OOS, net of 10 bps costs, 1-day execution
+delay): **CAGR +0.9%, Sharpe 0.18, max drawdown −9.2%, vs buy-and-hold CAGR
++14.2% — and walk-forward efficiency is negative.** Coffee 2024–25 was a
+violent, volatility-fueled bull market; the HMM associates high volatility with
+its worst state and the risk overlays cut exposure exactly when the market ran,
+so the long-only defensive system under-participates. That is reported plainly
+because the deliverable here is the *evaluation machinery that makes lying to
+yourself hard* — fold-local regime refits, causal features, purge gaps,
+execution delay, transaction costs, and visible failed folds — not a trading
+result. (The parent project's own honest post-audit number was a modest Sharpe
+~0.41; modest-and-true beats impressive-and-leaky.)
 
 ## Layout
 
 ```
 ascentagri/
-  contracts.py        parse contract codes (e.g. RMK24), First Notice Day + roll date, chain gaps
-  loader.py           read per-contract CSVs from data/raw/ into tidy OHLCV frames
-  roll.py             proportional (ratio) back-adjustment; returns ALL intermediates
-  validate.py         returns-around-each-roll diagnostics, offset sensitivity, plots
-  databento_fetch.py  optional: pull individual contracts from the Databento API into data/raw/
-  build_series.py     real-data runner (load -> roll -> reports -> CSV/plot)
-  worked_example.py   synthetic proof of the pipeline (no data needed)
-data/raw/        <- you drop manually-downloaded Barchart CSVs here (git-ignored)
-data/interim/    naive spliced (un-adjusted) series
-data/processed/  final ratio-adjusted continuous series
-notebooks/       01_build_continuous_series.ipynb  (load -> roll -> validate)
-tests/           pytest suite + synthetic fixtures with a known curve shape
-docs/            design spec
-```
-
-## Quick start
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pytest -q                                  # runs the synthetic worked example + property tests
-python -m ascentagri.worked_example        # prints the worked example + offset sensitivity
+  contracts.py / loader.py / roll.py /      data foundation: parse contract codes,
+    validate.py / build_series.py             load raw CSVs, ratio roll-adjustment,
+    databento_fetch.py / vendor_fetch.py      diagnostics, fetchers
+  macro_fetch.py      BRL/USD (FRED→Yahoo fallback) + Open-Meteo weather caches
+  config.py           one dataclass of coffee-tuned knobs (AgriConfig)
+  types.py            AgentOutput — standardized strategy-run record
+  regime/             features (price + BRL + weather anomalies), HMM/Markov model,
+                        asymmetric-hysteresis decision layer, crisis override,
+                        posture, structural breaks, engine
+  alpha/              trend + meanrev sleeves (rolling TS z-scores — the
+                        cross-sectional z-score zeroes out at N=1), vol_sizing
+                        (vol target + 200d MA), Bayesian sleeve meta_learner,
+                        stack (long-only combiner)
+  backtest/           engine (1-day delay, costs, cash-aware drift), costs
+  research/           walk-forward splits, CPCV, evaluation metrics + WFE,
+                        walk_forward_runner (single-series fold loop)
+demo.py               runnable end-to-end script
+demo.ipynb            the same pipeline with charts (ships executed)
+data/{raw,interim,processed}/   raw contracts (git-ignored) → caches
+outputs/{wf_results,backtest}/  generated reports (git-ignored)
+tests/                120 tests mirroring the packages; synthetic fixtures, no network
+docs/                 design specs
 ```
 
 ## Method summary
 
-- **Roll trigger:** roll `roll_offset_bd` business days before **First Notice Day** (FND).
-  FND = 4th business day before the 1st business day of the delivery month (ICE rule).
-  Default `roll_offset_bd = 5`. (Calendar-based, deterministic, reproducible.)
-- **Ratio window:** average the close over the **4 trading days immediately before the
-  roll date** on both the expiring and next contract; `ratio = avg_next / avg_exp`.
-- **Back-adjustment:** the most recent contract is left unadjusted; every earlier segment
-  is multiplied by the cumulative product of ratios at/after its rolls. Percentage
-  returns are preserved across every splice.
+- **Roll adjustment** (data foundation): roll 5 business days before First
+  Notice Day; ratio back-adjustment preserves percentage returns across every
+  splice. Spec: `docs/superpowers/specs/2026-06-24-ascent-agri-roll-adjustment-design.md`.
+- **Regime**: Gaussian HMM (K=3 default, walk-forward K selection available) on
+  trailing price/FX/weather features; entropy filter → asymmetric hysteresis
+  (downgrades at 0.40, upgrades at 0.70, 5-day dwell) → rule-based crisis
+  override (5-day return < −10% AND 21d vol > 45%).
+- **Alpha**: trend (momentum composite incl. 11-1 skip-month, MACD, SMA cross)
+  75% + short-term mean-reversion 25%, each normalized by a rolling 252-day
+  time-series z-score; regime tilts the mix per date.
+- **Sizing**: long-only `clip(score, 0, 1.5)/1.5` × regime risk multiplier ×
+  20%-vol-target overlay × 200d-MA filter (×0.70 below).
+- **Evaluation**: rolling walk-forward (train 504d / test 63d / purge 5d),
+  regime refit on each training slice only, backtest with 1-day execution delay
+  and 10 bps costs, WFE = mean(OOS Sharpe / IS Sharpe) over folds with IS
+  Sharpe ≥ 0.1. Failed folds are logged with fold id, stage, and exception —
+  never silently zeroed.
 
-Single source of truth for the method and decisions:
-`docs/superpowers/specs/2026-06-24-ascent-agri-roll-adjustment-design.md`.
+## Provenance of the code
+
+Ported from the Ascent Capital equity platform by copying/rewriting into this
+namespace (no imports, no shared code). Near-verbatim: regime model/decision/
+posture/breaks, splits/CPCV/evaluation, backtest engine/costs, meta-learner.
+Rewritten for a single instrument: regime features (universe breadth → BRL +
+weather), alpha normalization (cross-sectional → rolling time-series z-score),
+walk-forward runner (universe/sector machinery → single-series fold loop).
+Two latent source bugs surfaced and fixed during the port: the Markov backend
+returned train-window probabilities regardless of prediction input, and the
+backtest drift renormalization dropped the cash bucket at fractional exposure.

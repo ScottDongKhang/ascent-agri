@@ -15,10 +15,15 @@ data/raw/*.csv
 # Generated outputs (reproducible from raw + code)
 data/interim/*.csv
 data/interim/*.parquet
+data/interim/*.json
 data/processed/*.csv
 data/processed/*.parquet
 data/processed/PROVENANCE.md
 outputs/*.png
+outputs/*.jsonl
+outputs/wf_results/
+outputs/backtest/
+.ipynb_checkpoints/
 
 # Keep the directory structure and the raw/ instructions
 !data/raw/README.md
