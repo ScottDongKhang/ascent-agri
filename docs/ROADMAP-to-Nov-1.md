@@ -66,9 +66,11 @@ do**. Dated critical path below. Automated pieces keep running on their own.
       exposure of smallholder agriculture, honest quantitative science.
 - [ ] **Two or three named users.** A roaster, a teacher, a club — anyone
       who'll say "I check this" — beats a hundred anonymous pageviews.
-- [ ] Optional: **Vietnamese translation of the monitor** — authentic and
-      differentiating IF reviewed by a native speaker. Don't ship a machine
-      translation unreviewed.
+- [ ] **Get the Vietnamese grower page reviewed by a native speaker** — the
+      page is live at `/vi/` (draft translation, flagged as such in its
+      footer). A family member reviewing it is both quality control and a
+      true story for the essay. Fold their corrections into
+      `site/build_site.py` (the `*_VI` string tables and `daily_brief_vi`).
 
 ## October (freeze month)
 

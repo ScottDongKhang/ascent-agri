@@ -88,3 +88,23 @@ def transmission_line(robusta_usd_tonne: float, vnd_per_usd: float,
         line += (f"; a month of price movement is worth ~{abs(delta):,.0f} "
                  f"đồng/kg {direction} to a grower")
     return line + "."
+
+
+def _vn_num(x: float) -> str:
+    """Vietnamese thousands formatting (dots): 94808 → '94.808'."""
+    return f"{x:,.0f}".replace(",", ".")
+
+
+def transmission_line_vi(robusta_usd_tonne: float, vnd_per_usd: float,
+                         chg_1m: Optional[float] = None) -> str:
+    """Vietnamese variant of the farm-gate sentence, written independently."""
+    vnd_kg = futures_usd_tonne_to_vnd_kg(robusta_usd_tonne, vnd_per_usd)
+    line = (f"Theo tỷ giá hiện tại, giá robusta kỳ hạn tương đương "
+            f"~{_vn_num(vnd_kg)} đồng/kg cà phê nhân (quy đổi từ giá kỳ hạn, "
+            f"chưa tính chênh lệch giá tại địa phương)")
+    if chg_1m is not None and abs(chg_1m) > 0.001:
+        delta = vnd_kg - vnd_kg / (1 + chg_1m)
+        direction = "thấp hơn" if delta < 0 else "cao hơn"
+        line += (f"; biến động giá một tháng qua tương đương "
+                 f"~{_vn_num(abs(delta))} đồng/kg {direction} cho người trồng")
+    return line + "."

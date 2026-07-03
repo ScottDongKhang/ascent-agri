@@ -98,6 +98,25 @@ def test_api_endpoints(built):
     assert "close" not in rows[0], "no raw prices in history endpoint"
 
 
+def test_vietnamese_grower_page(built):
+    vi = (built / "vi" / "index.html").read_text()
+    for required in [
+        'lang="vi"',
+        "Theo dõi Cà phê Robusta",
+        "Buôn Ma Thuột",
+        "Giai đoạn của cây",
+        "Đây không phải lời khuyên đầu tư",
+        "../assets/weather.png",          # reuses the same daily charts
+        'href="../"',                     # link back to English page
+    ]:
+        assert required in vi, f"missing: {required!r}"
+    assert "{" not in vi.replace("{{", "").replace("}}", "") or \
+        "{s." not in vi, "unrendered template placeholder in VI page"
+    # English page links to the Vietnamese one
+    en = (built / "index.html").read_text()
+    assert 'href="vi/"' in en
+
+
 def test_crop_stage_on_page_and_api(built):
     import json
     html = (built / "index.html").read_text()

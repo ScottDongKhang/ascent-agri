@@ -36,7 +36,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from ascentagri.agronomy.economics import load_usdvnd, transmission_line  # noqa: E402
+from ascentagri.agronomy.economics import (                       # noqa: E402
+    load_usdvnd, transmission_line, transmission_line_vi)
 from ascentagri.agronomy.phenology import (                       # noqa: E402
     crop_stress_index, stage_for, stress_label)
 from ascentagri.ledger import LedgerScore, read_ledger, score_ledger  # noqa: E402
@@ -67,6 +68,24 @@ REGIME_WORDS = {
     "calm_bull": "calm uptrend", "euphoric": "late-cycle", "stressed": "stressed",
     "crisis": "crisis", "uncertain": "uncertain",
 }
+
+# ── Vietnamese strings (grower page) ────────────────────────────────────────
+# Draft translations written for simple, plain market/agronomy Vietnamese.
+# A native-speaker review is on the roadmap — wording kept short and factual
+# to minimize risk until then.
+REGIME_WORDS_VI = {
+    "calm_bull": "xu hướng tăng ổn định", "euphoric": "giai đoạn cuối chu kỳ",
+    "stressed": "căng thẳng", "crisis": "khủng hoảng",
+    "uncertain": "không chắc chắn",
+}
+STAGE_VI = {
+    "flowering & fruit set": "ra hoa và đậu quả",
+    "early fruit development": "quả non phát triển",
+    "fruit filling": "quả vào chắc",
+    "maturation & harvest": "chín và thu hoạch",
+}
+STRESS_VI = {"low": "thấp", "watch": "cần theo dõi",
+             "elevated": "cao", "severe": "nghiêm trọng", "": ""}
 
 plt.rcParams.update({
     "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
@@ -106,6 +125,7 @@ class MonitorState:
     crop_stress: Optional[float] = None
     crop_stress_band: str = ""        # low / watch / elevated / severe
     farm_gate_line: Optional[str] = None
+    farm_gate_line_vi: Optional[str] = None
     farm_gate_asof: str = ""
 
 
@@ -171,6 +191,7 @@ def compute_state(close: pd.Series, brl: pd.Series,
     # farm-gate economics (optional layer: robusta series + USD/VND both
     # needed; either missing → line silently absent, never a blocker)
     farm_gate_line = None
+    farm_gate_line_vi = None
     farm_gate_asof = ""
     robusta_csv = ROOT / "data" / "processed" / "robusta_continuous.csv"
     vnd = load_usdvnd()
@@ -181,6 +202,8 @@ def compute_state(close: pd.Series, brl: pd.Series,
             rob_chg_1m = (float(rob.iloc[-1] / rob.iloc[-22] - 1)
                           if len(rob) > 22 else None)
             farm_gate_line = transmission_line(
+                float(rob.iloc[-1]), float(vnd.iloc[-1]), chg_1m=rob_chg_1m)
+            farm_gate_line_vi = transmission_line_vi(
                 float(rob.iloc[-1]), float(vnd.iloc[-1]), chg_1m=rob_chg_1m)
             farm_gate_asof = (f"robusta futures {rob.index[-1].date()} · "
                               f"USD/VND {vnd.index[-1].date()}")
@@ -200,6 +223,7 @@ def compute_state(close: pd.Series, brl: pd.Series,
         crop_stress=crop_stress,
         crop_stress_band=stress_label(crop_stress) if crop_stress is not None else "",
         farm_gate_line=farm_gate_line,
+        farm_gate_line_vi=farm_gate_line_vi,
         farm_gate_asof=farm_gate_asof,
     )
 
@@ -461,6 +485,190 @@ def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
 """
 
 
+def daily_brief_vi(s: MonitorState) -> str:
+    """Vietnamese daily brief — same deterministic template logic as the
+    English one, written independently (not word-for-word translated) so it
+    reads naturally."""
+    word = REGIME_WORDS_VI.get(s.label, s.label)
+    dir_w = "tăng" if s.chg_1w >= 0 else "giảm"
+    dir_m = "tăng" if s.chg_1m >= 0 else "giảm"
+    parts = [
+        f"Giá cà phê kỳ hạn (chuẩn arabica) chốt ở {s.price:,.0f}¢/lb, "
+        f"{dir_w} {abs(s.chg_1w):.1%} trong tuần và {dir_m} "
+        f"{abs(s.chg_1m):.1%} trong tháng. Mô hình đánh giá thị trường đang "
+        f"ở trạng thái {word}, duy trì {max(s.dwell, 1)} phiên."
+    ]
+    if s.rain_z is not None:
+        stage_vi = STAGE_VI.get(s.crop_stage, s.crop_stage)
+        band_vi = STRESS_VI.get(s.crop_stress_band, s.crop_stress_band)
+        stage_bit = (f" Cây cà phê đang trong giai đoạn {stage_vi}; mức rủi ro "
+                     f"thời tiết theo giai đoạn: {band_vi}." if stage_vi else "")
+        if s.rain_z <= -1.0:
+            parts.append(
+                f"Lượng mưa quanh Buôn Ma Thuột thấp hơn nhiều so với mức "
+                f"bình thường theo mùa (dị thường 30 ngày {s.rain_z:+.1f}σ), "
+                f"kịch bản rủi ro nguồn cung robusta điển hình.{stage_bit}")
+        elif s.rain_z >= 1.0:
+            parts.append(
+                f"Lượng mưa Tây Nguyên cao hơn mức bình thường theo mùa "
+                f"({s.rain_z:+.1f}σ), độ ẩm thuận lợi cho vùng "
+                f"robusta.{stage_bit}")
+        else:
+            parts.append(
+                f"Lượng mưa Tây Nguyên gần mức bình thường theo mùa "
+                f"({s.rain_z:+.1f}σ).{stage_bit}")
+    if s.brl_chg_21d is not None:
+        if s.brl_chg_21d >= 0.02:
+            parts.append(
+                f"Đồng real Brazil yếu đi ({s.brl_chg_21d:+.1%} trong một "
+                f"tháng) làm tăng doanh thu nội tệ của nông dân Brazil, "
+                f"thêm áp lực bán ra thị trường thế giới.")
+        elif s.brl_chg_21d <= -0.02:
+            parts.append(
+                f"Đồng real Brazil mạnh lên ({s.brl_chg_21d:+.1%} trong một "
+                f"tháng), yếu tố hỗ trợ giá cà phê.")
+        else:
+            parts.append(
+                f"Đồng real Brazil ít thay đổi trong tháng "
+                f"({s.brl_chg_21d:+.1%}), bối cảnh tiền tệ trung tính.")
+    return " ".join(parts)
+
+
+def render_html_vi(s: MonitorState, brief_vi: str) -> str:
+    """The grower page — a focused Vietnamese page with what a Tây Nguyên
+    grower cares about: weather and crop-stage risk, market direction in
+    plain words, and the farm-gate đồng/kg line. Deliberately NOT a mirror
+    of the full English page."""
+    p = s.posture
+    accent = "#" + p.posture_color
+    updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    stage_vi = STAGE_VI.get(s.crop_stage, s.crop_stage)
+    band_vi = STRESS_VI.get(s.crop_stress_band, s.crop_stress_band)
+    word_vi = REGIME_WORDS_VI.get(s.label, s.label)
+    rain_line = (f"{s.rain_z:+.1f}σ so với mức bình thường theo mùa"
+                 if s.rain_z is not None else "không có dữ liệu")
+    stress_line = (f"{band_vi} ({s.crop_stress:.2f})"
+                   if s.crop_stress is not None else "không có dữ liệu")
+    farm_gate_html = ""
+    if s.farm_gate_line_vi:
+        farm_gate_html = (
+            f'<div class="stat"><div class="k">Giá quy đổi tại vườn</div>'
+            f'<div class="v" style="font-size:15px">{s.farm_gate_line_vi}'
+            f' <span style="opacity:.6">({s.farm_gate_asof})</span></div></div>')
+
+    return f"""<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theo dõi Cà phê Robusta — thời tiết Tây Nguyên và thị trường</title>
+<meta name="description" content="Trang miễn phí, cập nhật mỗi ngày: điều kiện thời tiết vùng trồng robusta Tây Nguyên, giai đoạn sinh trưởng của cây cà phê, và diễn biến thị trường cà phê thế giới.">
+<style>
+  :root {{ --bg: {PAGE_BG}; --surface: {SURFACE}; --ink: {INK};
+          --muted: {MUTED}; --hairline: {HAIRLINE}; --accent: {accent}; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: var(--bg); color: var(--ink);
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }}
+  .wrap {{ max-width: 820px; margin: 0 auto; padding: 0 24px 80px; }}
+  header {{ padding: 48px 0 24px; border-bottom: 1px solid var(--hairline); }}
+  .kicker {{ font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+             color: var(--muted); }}
+  .lang {{ float: right; font-size: 13px; color: var(--muted); }}
+  .lang a {{ color: var(--ink); text-decoration-color: var(--muted); }}
+  h1 {{ font-family: Georgia, serif; font-weight: 500; font-size: 30px;
+        margin-top: 10px; line-height: 1.25; }}
+  .sub {{ color: var(--muted); margin-top: 10px; max-width: 640px; }}
+  .hero {{ margin: 32px 0; padding: 26px; background: var(--surface);
+           border: 1px solid var(--hairline); border-left: 3px solid var(--accent); }}
+  .stats {{ display: flex; flex-wrap: wrap; gap: 24px; margin-top: 6px; }}
+  .stat .k {{ font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+              color: var(--muted); }}
+  .stat .v {{ font-size: 18px; margin-top: 2px; }}
+  .brief {{ margin-top: 18px; }}
+  section {{ margin-top: 44px; }}
+  h2 {{ font-family: Georgia, serif; font-weight: 500; font-size: 21px;
+        padding-bottom: 10px; border-bottom: 1px solid var(--hairline); }}
+  .asof {{ color: var(--muted); font-size: 13px; margin: 8px 0 14px; }}
+  figure img {{ width: 100%; height: auto; border: 1px solid var(--hairline); }}
+  figcaption {{ color: var(--muted); font-size: 13.5px; margin-top: 10px; }}
+  footer {{ margin-top: 60px; padding-top: 20px;
+            border-top: 1px solid var(--hairline); color: var(--muted);
+            font-size: 13px; }}
+  footer p {{ margin-top: 8px; }}
+  footer a {{ color: var(--ink); text-decoration-color: var(--muted); }}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="lang"><a href="../">English</a> · Tiếng Việt</div>
+  <div class="kicker">ascent-agri · dành cho người trồng cà phê</div>
+  <h1>Theo dõi Cà phê Robusta</h1>
+  <p class="sub">Trang miễn phí, tự cập nhật mỗi ngày làm việc: thời tiết
+  vùng trồng robusta Tây Nguyên, giai đoạn sinh trưởng của cây, và diễn biến
+  thị trường thế giới, viết bằng ngôn ngữ dễ hiểu. Toàn bộ mã nguồn và dữ
+  liệu đều mở.</p>
+</header>
+
+<div class="hero">
+  <div class="stats">
+    <div class="stat"><div class="k">Giai đoạn của cây</div>
+      <div class="v">{stage_vi}</div></div>
+    <div class="stat"><div class="k">Rủi ro thời tiết theo giai đoạn</div>
+      <div class="v">{stress_line}</div></div>
+    <div class="stat"><div class="k">Lượng mưa 30 ngày</div>
+      <div class="v">{rain_line}</div></div>
+    <div class="stat"><div class="k">Thị trường</div>
+      <div class="v">{word_vi}</div></div>
+    {farm_gate_html}
+  </div>
+  <p class="brief">{brief_vi}</p>
+</div>
+
+<section>
+  <h2>Thời tiết vùng trồng — Buôn Ma Thuột, Đắk Lắk</h2>
+  <p class="asof">dữ liệu thời tiết đến {s.weather_asof}</p>
+  <figure>
+    <img src="../assets/weather.png" alt="Dị thường lượng mưa và chuỗi ngày khô tại Buôn Ma Thuột">
+    <figcaption>Biểu đồ trên: lượng mưa 30 ngày so với chính địa phương này
+    trong một năm gần nhất (dưới dải màu là thiếu mưa). Biểu đồ dưới: tỷ lệ
+    ngày gần như không mưa trong 30 ngày qua. Cùng một mức thiếu mưa nhưng
+    tác động khác nhau tùy giai đoạn: thiếu nước lúc ra hoa (tháng 1–3) gây
+    hại nặng nhất, còn mưa nhiều vào vụ thu hoạch (tháng 10–12) lại là rủi
+    ro phơi sấy.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Thị trường thế giới</h2>
+  <p class="asof">dữ liệu giá đến {s.price_asof} · chuẩn arabica KC=F (chuỗi
+  robusta liên tục đang được xây dựng từ các hợp đồng riêng lẻ)</p>
+  <figure>
+    <img src="../assets/price_regime.png" alt="Giá cà phê kỳ hạn với trạng thái thị trường">
+    <figcaption>Giá cà phê kỳ hạn, tô màu theo trạng thái thị trường mà mô
+    hình nhận diện (vùng không tô = xu hướng tăng ổn định; vàng = căng
+    thẳng; đỏ = khủng hoảng).</figcaption>
+  </figure>
+</section>
+
+<footer>
+  <p><strong style="color:var(--ink)">Đây không phải lời khuyên đầu tư.</strong>
+  Dự án giáo dục, mã nguồn mở, phi lợi nhuận. Dữ liệu: Yahoo Finance,
+  Open-Meteo. Bản dịch tiếng Việt đang được hoàn thiện — góp ý xin gửi
+  <a href="https://github.com/ScottDongKhang/ascent-agri/issues">tại đây</a>.</p>
+  <p>Trang đầy đủ (nghiên cứu, API dữ liệu, phương pháp):
+  <a href="../">bản tiếng Anh</a> · Scott Dong · cập nhật {updated}</p>
+</footer>
+
+</div>
+<script data-goatcounter="https://ascent-agri.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
+"""
+
+
 # ── charts ──────────────────────────────────────────────────────────────────
 
 def _save(fig, path: Path):
@@ -618,6 +826,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
 <div class="wrap">
 
 <header>
+  <div style="float:right;font-size:13px;color:var(--muted)">English ·
+    <a href="vi/" style="color:var(--ink);text-decoration-color:var(--muted)">Tiếng Việt</a></div>
   <div class="kicker">ascent-agri · daily agricultural market intelligence</div>
   <h1>Robusta Coffee Monitor</h1>
   <p class="sub">A model-driven read on coffee markets and the Vietnamese crop:
@@ -811,6 +1021,10 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
 
     (out_dir / "index.html").write_text(render_html(state, brief, ledger_html))
     (out_dir / ".nojekyll").write_text("")
+
+    vi_dir = out_dir / "vi"
+    vi_dir.mkdir(parents=True, exist_ok=True)
+    (vi_dir / "index.html").write_text(render_html_vi(state, daily_brief_vi(state)))
 
     site_url = "https://scottdongkhang.github.io/ascent-agri/"
     (out_dir / "feed.xml").write_text(render_feed(state, site_url))
