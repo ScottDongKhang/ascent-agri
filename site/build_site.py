@@ -36,6 +36,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from ascentagri.agronomy.economics import load_usdvnd, transmission_line  # noqa: E402
+from ascentagri.agronomy.phenology import (                       # noqa: E402
+    crop_stress_index, stage_for, stress_label)
 from ascentagri.ledger import LedgerScore, read_ledger, score_ledger  # noqa: E402
 from ascentagri.regime.engine import RegimeEngine                 # noqa: E402
 from ascentagri.regime.features import RegimeFeatureBuilder      # noqa: E402
@@ -43,6 +46,8 @@ from ascentagri.regime.posture import compute_posture_from_regime  # noqa: E402
 
 PROCESSED = ROOT / "data" / "processed"
 DEFAULT_OUT = ROOT / "site" / "_build"
+
+log = logging.getLogger(__name__)
 
 # ── palette (validated dark-mode steps + posture status colors) ────────────
 SURFACE   = "#1a1a19"
@@ -96,6 +101,12 @@ class MonitorState:
     price_asof: str
     weather_asof: str
     brl_asof: str
+    crop_stage: str = ""              # human label, e.g. "fruit filling"
+    crop_stage_note: str = ""         # one-line agronomy rationale
+    crop_stress: Optional[float] = None
+    crop_stress_band: str = ""        # low / watch / elevated / severe
+    farm_gate_line: Optional[str] = None
+    farm_gate_asof: str = ""
 
 
 def load_inputs() -> "tuple[pd.Series, pd.Series, pd.DataFrame]":
@@ -149,6 +160,33 @@ def compute_state(close: pd.Series, brl: pd.Series,
                 if "dry_frac_30d" in panel and panel["dry_frac_30d"].notna().any() else None)
     brl_chg = (float(brl.iloc[-1] / brl.iloc[-22] - 1) if len(brl) > 22 else None)
 
+    # agronomy: crop stage + stage-weighted stress (phenology-aware)
+    today = close.index[-1]
+    stage = stage_for(today)
+    crop_stress = None
+    if rain_z is not None:
+        crop_stress = float(crop_stress_index(
+            pd.Series([rain_z], index=[today])).iloc[0])
+
+    # farm-gate economics (optional layer: robusta series + USD/VND both
+    # needed; either missing → line silently absent, never a blocker)
+    farm_gate_line = None
+    farm_gate_asof = ""
+    robusta_csv = ROOT / "data" / "processed" / "robusta_continuous.csv"
+    vnd = load_usdvnd()
+    if robusta_csv.exists() and vnd is not None and len(vnd) > 0:
+        try:
+            rob = (pd.read_csv(robusta_csv, parse_dates=["date"])
+                   .set_index("date").sort_index()["close"])
+            rob_chg_1m = (float(rob.iloc[-1] / rob.iloc[-22] - 1)
+                          if len(rob) > 22 else None)
+            farm_gate_line = transmission_line(
+                float(rob.iloc[-1]), float(vnd.iloc[-1]), chg_1m=rob_chg_1m)
+            farm_gate_asof = (f"robusta futures {rob.index[-1].date()} · "
+                              f"USD/VND {vnd.index[-1].date()}")
+        except Exception as exc:
+            log.warning("farm-gate layer skipped: %s", exc)
+
     return MonitorState(
         close=close, signals=signals, feature_panel=panel, brl=brl,
         weather=weather, posture=posture, label=label, dwell=dwell,
@@ -157,6 +195,12 @@ def compute_state(close: pd.Series, brl: pd.Series,
         price_asof=str(close.index[-1].date()),
         weather_asof=str(weather.index[-1].date()),
         brl_asof=str(brl.index[-1].date()),
+        crop_stage=stage.label,
+        crop_stage_note=stage.note,
+        crop_stress=crop_stress,
+        crop_stress_band=stress_label(crop_stress) if crop_stress is not None else "",
+        farm_gate_line=farm_gate_line,
+        farm_gate_asof=farm_gate_asof,
     )
 
 
@@ -175,20 +219,23 @@ def daily_brief(s: MonitorState) -> str:
         f"{posture_note} and has for {max(s.dwell, 1)} sessions."
     ]
     if s.rain_z is not None:
+        stage_bit = (f" The crop is in its {s.crop_stage} window"
+                     f"{f', and stage-weighted stress is {s.crop_stress_band}' if s.crop_stress_band else ''}."
+                     if s.crop_stage else "")
         if s.rain_z <= -1.0:
             parts.append(
                 f"Rainfall around Buon Ma Thuot is running well below its "
                 f"seasonal norm (30-day anomaly {s.rain_z:+.1f}σ) — the classic "
-                f"robusta supply-risk setup.")
+                f"robusta supply-risk setup.{stage_bit}")
         elif s.rain_z >= 1.0:
             parts.append(
                 f"Rainfall in the Central Highlands is running above its "
                 f"seasonal norm ({s.rain_z:+.1f}σ) — favorable moisture for the "
-                f"robusta belt.")
+                f"robusta belt.{stage_bit}")
         else:
             parts.append(
                 f"Growing conditions look unremarkable: Central Highlands "
-                f"rainfall is near its seasonal norm ({s.rain_z:+.1f}σ).")
+                f"rainfall is near its seasonal norm ({s.rain_z:+.1f}σ).{stage_bit}")
     if s.brl_chg_21d is not None:
         if s.brl_chg_21d >= 0.02:
             parts.append(
@@ -225,16 +272,23 @@ def _brief_state_at(s: MonitorState, date: pd.Timestamp) -> Optional[MonitorStat
     panel = s.feature_panel.loc[:date]
     rain = panel["rain_anom_30d"].dropna() if "rain_anom_30d" in panel else pd.Series(dtype=float)
     brl = s.brl.loc[:date]
+    rain_z = float(rain.iloc[-1]) if len(rain) else None
+    stage = stage_for(date)
+    stress = (float(crop_stress_index(pd.Series([rain_z], index=[date])).iloc[0])
+              if rain_z is not None else None)
     return MonitorState(
         close=close, signals=sig, feature_panel=panel, brl=brl,
         weather=s.weather, posture=posture, label=label, dwell=dwell,
         price=float(close.iloc[-1]),
         chg_1w=float(close.iloc[-1] / close.iloc[-6] - 1),
         chg_1m=float(close.iloc[-1] / close.iloc[-22] - 1),
-        rain_z=float(rain.iloc[-1]) if len(rain) else None,
+        rain_z=rain_z,
         dry_frac=None,
         brl_chg_21d=float(brl.iloc[-1] / brl.iloc[-22] - 1) if len(brl) > 22 else None,
         price_asof=str(date.date()), weather_asof="", brl_asof="",
+        crop_stage=stage.label, crop_stage_note=stage.note,
+        crop_stress=stress,
+        crop_stress_band=stress_label(stress) if stress is not None else "",
     )
 
 
@@ -312,6 +366,20 @@ def render_api_latest(s: MonitorState, brief: str) -> str:
             "rain_anom_30d_z": round(s.rain_z, 3) if s.rain_z is not None else None,
             "dry_frac_30d": round(s.dry_frac, 3) if s.dry_frac is not None else None,
         },
+        "crop": {
+            "stage": s.crop_stage,
+            "stage_note": s.crop_stage_note,
+            "stress_index": round(s.crop_stress, 3) if s.crop_stress is not None else None,
+            "stress_band": s.crop_stress_band or None,
+            "method": ("30-day rainfall anomaly weighted by the Dak Lak "
+                       "robusta phenology calendar (drought-sensitive "
+                       "flowering/fruit-set, wetness-sensitive harvest)"),
+        },
+        "farm_gate": ({
+            "line": s.farm_gate_line,
+            "as_of": s.farm_gate_asof,
+            "note": "futures-equivalent VND/kg, before local basis",
+        } if s.farm_gate_line else None),
         "fx": {
             "brl_usd_chg_21d": round(s.brl_chg_21d, 5)
             if s.brl_chg_21d is not None else None,
@@ -597,12 +665,20 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
   <h2>Growing conditions — Central Highlands, Vietnam</h2>
   <p class="asof">weather data through {s.weather_asof} · Buon Ma Thuot, Dak Lak
   (12.68 N, 108.04 E) · {dry_line}</p>
+  <p class="asof"><strong style="color:var(--ink)">crop stage:
+  {s.crop_stage}</strong>{f" · stage-weighted stress: {s.crop_stress_band} ({s.crop_stress:.2f})" if s.crop_stress is not None else ""}
+  — {s.crop_stage_note}</p>
+  {f'<p class="asof">{s.farm_gate_line} <span style="opacity:.7">({s.farm_gate_asof})</span></p>' if s.farm_gate_line else ""}
   <figure>
     <img src="assets/weather.png" alt="Rainfall anomaly and dry-spell intensity at Buon Ma Thuot">
     <figcaption>Vietnam grows most of the world's robusta, and most of that in
     the Central Highlands. Each series is compared only to its own trailing
-    year, so the anomaly is seasonal-aware and fully causal. Persistent dry
-    anomalies here have preceded the major robusta squeezes.</figcaption>
+    year, so the anomaly is seasonal-aware and fully causal — and the stress
+    read is phenology-weighted: the same rainfall deficit matters far more
+    during dry-season flowering (Jan–Mar), when a failed blossom cannot be
+    recovered, than during harvest (Oct–Dec), when wetness, not drought, is
+    the risk. Persistent dry anomalies here have preceded the major robusta
+    squeezes.</figcaption>
   </figure>
 </section>
 

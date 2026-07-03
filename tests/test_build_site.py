@@ -98,6 +98,18 @@ def test_api_endpoints(built):
     assert "close" not in rows[0], "no raw prices in history endpoint"
 
 
+def test_crop_stage_on_page_and_api(built):
+    import json
+    html = (built / "index.html").read_text()
+    assert "crop stage:" in html
+    latest = json.loads((built / "api" / "latest.json").read_text())
+    crop = latest["crop"]
+    assert crop["stage"] in {"flowering & fruit set", "early fruit development",
+                             "fruit filling", "maturation & harvest"}
+    assert crop["stress_band"] in {"low", "watch", "elevated", "severe", None}
+    assert "phenology" in crop["method"]
+
+
 def test_data_section_on_page(built):
     html = (built / "index.html").read_text()
     assert "Data &amp; API" in html
