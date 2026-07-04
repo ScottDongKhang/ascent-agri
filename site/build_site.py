@@ -611,9 +611,38 @@ def chart_ledger(score: LedgerScore, out: Path) -> bool:
     return True
 
 
-def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
+def render_ledger_section(score: LedgerScore, has_chart: bool,
+                          verification=None) -> str:
+    from ascentagri.agronomy.forecast import MIN_VERIFIED_WINDOWS
     raw_url = ("https://github.com/ScottDongKhang/ascent-agri/blob/main/"
                "data/ledger/forecasts.jsonl")
+    snap_url = ("https://github.com/ScottDongKhang/ascent-agri/blob/main/"
+                "data/ledger/weather_forecasts.jsonl")
+    if verification is None or verification.n_snapshots == 0:
+        ver_html = ""
+    elif verification.n_closed < MIN_VERIFIED_WINDOWS:
+        when = (f" First scored table appears after {MIN_VERIFIED_WINDOWS} "
+                f"closed windows"
+                + (f" (~{verification.first_scoreable})."
+                   if verification.first_scoreable else "."))
+        ver_html = (
+            f'<h3 style="margin-top:24px;font-size:16px">Forecast '
+            f'verification</h3>'
+            f'<p class="asof">{verification.n_snapshots} rainfall forecasts '
+            f'issued and committed; {verification.n_closed} windows closed.'
+            f'{when} <a href="{snap_url}">Inspect the raw snapshots</a>.</p>')
+    else:
+        v = verification
+        verdict = ("beats" if v.skill > 0 else "does not beat")
+        ver_html = (
+            f'<h3 style="margin-top:24px;font-size:16px">Forecast '
+            f'verification</h3>'
+            f'<p class="asof">{v.n_closed} closed 14-day windows · forecast '
+            f'MAE {v.mae_forecast_mm:.1f} mm vs climatology '
+            f'{v.mae_climatology_mm:.1f} mm · skill {v.skill:+.2f} '
+            f'({verdict} the climatology baseline) · bias {v.bias_mm:+.1f} mm '
+            f'· stress-band hit rate {v.band_hit_rate:.0%} · '
+            f'<a href="{snap_url}">raw snapshots</a>.</p>')
     if score.n_entries == 0:
         body = "<p class=\"asof\">The ledger opens with the next daily run.</p>"
     elif score.n_scored_days == 0:
@@ -639,6 +668,7 @@ def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
   scoring uses only the prices recorded in the ledger itself, with a 1-day
   execution delay. If the model is wrong, this section says so forever.</p>
   {body}
+  {ver_html}
   <ul><li><a href="{raw_url}">Inspect the raw ledger on GitHub</a></li></ul>
 </section>
 """
@@ -1191,7 +1221,14 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
 
     ledger_score = score_ledger(read_ledger())
     has_ledger_chart = chart_ledger(ledger_score, assets / "ledger.png")
-    ledger_html = render_ledger_section(ledger_score, has_ledger_chart)
+    forecast_ver = None
+    try:
+        from ascentagri.agronomy.forecast import score_snapshots
+        forecast_ver = score_snapshots()
+    except Exception as exc:
+        log.warning("forecast verification skipped: %s", exc)
+    ledger_html = render_ledger_section(ledger_score, has_ledger_chart,
+                                        verification=forecast_ver)
 
     # long-view trend chart (always available — same close series)
     chart_long_view(state, assets / "long_view.png")

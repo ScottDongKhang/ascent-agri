@@ -181,6 +181,32 @@ def test_ledger_chart_and_section_mature_path(tmp_path):
     assert "scored days" in html and "assets/ledger.png" in html
 
 
+def test_ledger_section_shows_forecast_verification_young():
+    from ascentagri.agronomy.forecast import ForecastVerification
+    from ascentagri.ledger import score_ledger
+    score = score_ledger([])
+    ver = ForecastVerification(
+        n_snapshots=3, n_closed=0, mae_forecast_mm=0.0,
+        mae_climatology_mm=0.0, bias_mm=0.0, skill=0.0, band_hit_rate=0.0,
+        first_scoreable="2026-07-25")
+    html = build_site.render_ledger_section(score, False, verification=ver)
+    assert "Forecast verification" in html
+    assert "2026-07-25" in html
+
+
+def test_ledger_section_shows_forecast_verification_scored():
+    from ascentagri.agronomy.forecast import ForecastVerification
+    from ascentagri.ledger import score_ledger
+    ver = ForecastVerification(
+        n_snapshots=9, n_closed=6, mae_forecast_mm=12.0,
+        mae_climatology_mm=10.0, bias_mm=3.0, skill=-0.2, band_hit_rate=0.5,
+        first_scoreable=None)
+    html = build_site.render_ledger_section(score_ledger([]), False,
+                                            verification=ver)
+    assert "skill" in html and "-0.20" in html
+    assert "climatology" in html and "does not beat" in html
+
+
 def test_posture_is_known_value(built):
     html = (built / "index.html").read_text()
     assert any(w in html for w in
