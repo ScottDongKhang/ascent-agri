@@ -469,6 +469,95 @@ def render_api_history(s: MonitorState) -> str:
     return df.to_csv(date_format="%Y-%m-%d")
 
 
+def compute_changes(s: MonitorState, snapshots: "list[dict] | None" = None,
+                    n: int = 20) -> "list[dict]":
+    """State CHANGES only (not daily state), for pollers: regime label flips,
+    stress-band crossings, and projected-band flips from the snapshot ledger.
+    Derived deterministically from already-committed history — no state file."""
+    events = []
+
+    lab = s.signals["label"].astype(str)
+    flips = lab[lab != lab.shift(1)].iloc[1:]         # first row has no prior
+    for date in flips.index:
+        pos = lab.index.get_loc(date)
+        events.append({"date": str(date.date()), "type": "regime_change",
+                       "from": str(lab.iloc[pos - 1]), "to": str(lab.loc[date])})
+
+    if s.feature_panel is not None and "rain_anom_30d" in s.feature_panel:
+        z = s.feature_panel["rain_anom_30d"].dropna()
+        if len(z) > 1:
+            bands = crop_stress_index(z).map(stress_label)
+            bflips = bands[bands != bands.shift(1)].iloc[1:]
+            for date in bflips.index:
+                pos = bands.index.get_loc(date)
+                events.append({"date": str(date.date()),
+                               "type": "stress_band_change",
+                               "from": str(bands.iloc[pos - 1]),
+                               "to": str(bands.loc[date])})
+
+    prev = None
+    for e in (snapshots or []):
+        band = e.get("projected_band")
+        if prev is not None and band != prev:
+            events.append({"date": e["date_issued"],
+                           "type": "projected_stress_band_change",
+                           "from": prev, "to": band})
+        prev = band
+
+    events.sort(key=lambda d: (d["date"], d["type"]))
+    return list(reversed(events[-n:]))                 # newest first
+
+
+def render_changes_json(changes: "list[dict]") -> str:
+    import json
+    return json.dumps({
+        "schema_version": 1,
+        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "doc": ("State changes only — poll this instead of scraping the page. "
+                "Types: regime_change, stress_band_change, "
+                "projected_stress_band_change. Newest first."),
+        "changes": changes,
+        "attribution": API_ATTRIBUTION,
+        "license": API_LICENSE,
+    }, indent=2)
+
+
+def render_alerts_feed(changes: "list[dict]", site_url: str) -> str:
+    """RSS that fires ONLY on state changes — the subscription for people who
+    want to hear from the monitor only when something moved."""
+    from email.utils import format_datetime
+    from xml.sax.saxutils import escape
+    items = []
+    for c in changes:
+        d = (pd.Timestamp(c["date"]).to_pydatetime()
+             .replace(hour=21, minute=30, tzinfo=timezone.utc))
+        title = escape(f"{c['type'].replace('_', ' ')}: "
+                       f"{c['from']} → {c['to']} ({c['date']})")
+        items.append(
+            f"    <item>\n"
+            f"      <title>{title}</title>\n"
+            f"      <link>{site_url}</link>\n"
+            f"      <guid isPermaLink=\"false\">ascent-agri-alert-"
+            f"{c['type']}-{c['date']}</guid>\n"
+            f"      <pubDate>{format_datetime(d)}</pubDate>\n"
+            f"      <description>{title}</description>\n"
+            f"    </item>")
+    now = format_datetime(datetime.now(timezone.utc))
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        "  <channel>\n"
+        "    <title>Robusta Coffee Monitor — alerts</title>\n"
+        f"    <link>{site_url}</link>\n"
+        "    <description>Fires only when the regime or crop-stress state "
+        "changes.</description>\n"
+        f"    <lastBuildDate>{now}</lastBuildDate>\n"
+        + "\n".join(items) + "\n"
+        "  </channel>\n"
+        "</rss>\n"
+    )
+
+
 def chart_long_view(s: MonitorState, out: Path):
     """Full-history price with the 200-day average — the near-to-long-term
     trend view. Added after feedback from a green-coffee educator that the
@@ -1124,6 +1213,12 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
         daily history of regime labels, risk multipliers and rainfall
         anomalies.</li>
     <li><a href="feed.xml"><code>feed.xml</code></a> — the daily brief as RSS.</li>
+    <li><a href="api/changes.json"><code>api/changes.json</code></a> — state
+        <em>changes</em> only (regime flips, stress-band crossings) — poll
+        this on your schedule instead of scraping the page.</li>
+    <li><a href="alerts.xml"><code>alerts.xml</code></a> — the same changes as
+        an RSS feed: fires only when something moved (pairs well with any
+        RSS-to-email bridge).</li>
     <li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">the
         public ledger</a> — the model's append-only, scoreable track record.</li>
   </ul>
@@ -1273,6 +1368,17 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     api_dir.mkdir(parents=True, exist_ok=True)
     (api_dir / "latest.json").write_text(render_api_latest(state, brief))
     (api_dir / "history.csv").write_text(render_api_history(state))
+
+    # fire-on-change surfaces for pollers
+    snapshots = []
+    try:
+        from ascentagri.agronomy.forecast import read_snapshots
+        snapshots = read_snapshots()
+    except Exception as exc:
+        log.warning("snapshot read skipped: %s", exc)
+    changes = compute_changes(state, snapshots=snapshots)
+    (api_dir / "changes.json").write_text(render_changes_json(changes))
+    (out_dir / "alerts.xml").write_text(render_alerts_feed(changes, site_url))
 
     paper = ROOT / "docs" / "research" / "weather-and-coffee-returns.pdf"
     if paper.exists():

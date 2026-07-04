@@ -181,6 +181,58 @@ def test_ledger_chart_and_section_mature_path(tmp_path):
     assert "scored days" in html and "assets/ledger.png" in html
 
 
+def _mini_state(labels, rain_z):
+    idx = pd.bdate_range("2026-06-01", periods=len(labels))
+    signals = pd.DataFrame({"label": labels}, index=idx)
+    panel = pd.DataFrame({"rain_anom_30d": rain_z}, index=idx)
+
+    class P:
+        posture = "neutral"
+        risk_multiplier = 1.0
+    return build_site.MonitorState(
+        close=None, signals=signals, feature_panel=panel, brl=None,
+        weather=None, posture=P(), label=labels[-1], dwell=1, price=100.0,
+        chg_1w=0.0, chg_1m=0.0, rain_z=rain_z[-1], dry_frac=None,
+        brl_chg_21d=None, price_asof="", weather_asof="", brl_asof="")
+
+
+def test_compute_changes_finds_transitions():
+    s = _mini_state(["calm_bull", "calm_bull", "stressed", "stressed"],
+                    [0.0, 0.0, -3.0, -3.0])   # June: filling, d_w 0.5 → band flip
+    changes = build_site.compute_changes(s)
+    types = {c["type"] for c in changes}
+    assert "regime_change" in types and "stress_band_change" in types
+    reg = [c for c in changes if c["type"] == "regime_change"][0]
+    assert reg["from"] == "calm_bull" and reg["to"] == "stressed"
+    dates = [c["date"] for c in changes]
+    assert dates == sorted(dates, reverse=True)     # newest first
+
+
+def test_compute_changes_projected_band_from_snapshots():
+    s = _mini_state(["calm_bull", "calm_bull"], [0.0, 0.0])
+    snaps = [{"date_issued": "2026-06-01", "projected_band": "low"},
+             {"date_issued": "2026-06-02", "projected_band": "elevated"}]
+    changes = build_site.compute_changes(s, snapshots=snaps)
+    proj = [c for c in changes if c["type"] == "projected_stress_band_change"]
+    assert len(proj) == 1
+    assert proj[0]["from"] == "low" and proj[0]["to"] == "elevated"
+
+
+def test_compute_changes_no_changes_is_empty():
+    s = _mini_state(["calm_bull", "calm_bull"], [0.0, 0.0])
+    assert build_site.compute_changes(s, snapshots=[]) == []
+
+
+def test_changes_json_and_alerts_feed_in_build(built):
+    import json
+    import xml.etree.ElementTree as ET
+    payload = json.loads((built / "api" / "changes.json").read_text())
+    assert payload["schema_version"] == 1
+    assert isinstance(payload["changes"], list)
+    root = ET.fromstring((built / "alerts.xml").read_text())
+    assert root.tag == "rss"
+
+
 def test_ledger_section_shows_forecast_verification_young():
     from ascentagri.agronomy.forecast import ForecastVerification
     from ascentagri.ledger import score_ledger
