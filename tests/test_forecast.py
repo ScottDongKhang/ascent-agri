@@ -118,3 +118,31 @@ def test_compute_outlook_short_forecast_raises():
     hist = _history()
     with pytest.raises(ValueError):
         fc.compute_outlook(_forecast_frame(days=5), hist)
+
+
+def _outlook(issued="2026-07-06", band="low"):
+    return fc.ForwardOutlook(
+        issued=issued, window_start=issued, window_end="2026-07-19",
+        expected_mm=10.0, norm_mm=28.0, std_mm=4.0, anom_z=-4.5,
+        drought_w=0.5, wetness_w=0.1, stage_label="fruit filling",
+        projected_stress=2.25, projected_band=band)
+
+
+def test_snapshot_append_and_read(tmp_path):
+    path = tmp_path / "weather_forecasts.jsonl"
+    assert fc.append_snapshot(_outlook("2026-07-06"), path=path) is True
+    assert fc.append_snapshot(_outlook("2026-07-07"), path=path) is True
+    entries = fc.read_snapshots(path)
+    assert [e["date_issued"] for e in entries] == ["2026-07-06", "2026-07-07"]
+    assert entries[0]["schema"] == 1
+    assert entries[0]["projected_band"] == "low"
+    assert entries[0]["drought_w"] == 0.5      # weights stored for scoring
+
+
+def test_snapshot_append_is_idempotent_per_day(tmp_path):
+    path = tmp_path / "weather_forecasts.jsonl"
+    fc.append_snapshot(_outlook("2026-07-06"), path=path)
+    before = path.read_text()
+    assert fc.append_snapshot(_outlook("2026-07-06", band="severe"),
+                              path=path) is False
+    assert path.read_text() == before          # never edited, never duplicated

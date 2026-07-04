@@ -154,3 +154,51 @@ def compute_outlook(forecast: pd.DataFrame, history: pd.DataFrame,
         drought_w=d_w, wetness_w=w_w,
         stage_label=max(set(labels), key=labels.count),
         projected_stress=float(stress), projected_band=stress_label(stress))
+
+
+# ── the snapshot ledger (append-only, committed) ────────────────────────────
+
+def read_snapshots(path: Path = SNAPSHOT_PATH) -> List[Dict]:
+    if not path.exists():
+        return []
+    entries = [json.loads(line) for line in path.read_text().splitlines()
+               if line.strip()]
+    return sorted(entries, key=lambda e: e["date_issued"])
+
+
+def append_snapshot(outlook: ForwardOutlook, path: Path = SNAPSHOT_PATH) -> bool:
+    """Write today's issued forecast down before the outcome is known.
+    One entry per issue date; existing lines are never touched."""
+    entry = {"schema": 1, "date_issued": outlook.issued}
+    entry.update({k: v for k, v in asdict(outlook).items() if k != "issued"})
+    if any(e["date_issued"] == outlook.issued for e in read_snapshots(path)):
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(entry, sort_keys=True) + "\n")
+    return True
+
+
+# ── CLI ─────────────────────────────────────────────────────────────────────
+
+def main(argv: "list[str] | None" = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("cmd", choices=["fetch", "score"])
+    args = ap.parse_args(argv)
+    if args.cmd == "fetch":
+        fcst = fetch_forecast()
+        write_cache(fcst)
+        outlook = compute_outlook(fcst, load_weather())
+        added = append_snapshot(outlook)
+        print(f"[forecast] cached {len(fcst)} days; snapshot "
+              f"{'appended' if added else 'already present'} for "
+              f"{outlook.issued}: {outlook.expected_mm:.0f}mm vs norm "
+              f"{outlook.norm_mm:.0f}mm ({outlook.anom_z:+.1f} sigma) -> "
+              f"{outlook.projected_band}")
+    else:
+        print(score_snapshots().summary_line())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
