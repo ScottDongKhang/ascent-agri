@@ -181,11 +181,195 @@ def test_ledger_chart_and_section_mature_path(tmp_path):
     assert "scored days" in html and "assets/ledger.png" in html
 
 
+def _mini_state(labels, rain_z):
+    idx = pd.bdate_range("2026-06-01", periods=len(labels))
+    signals = pd.DataFrame({"label": labels}, index=idx)
+    panel = pd.DataFrame({"rain_anom_30d": rain_z}, index=idx)
+
+    class P:
+        posture = "neutral"
+        risk_multiplier = 1.0
+    return build_site.MonitorState(
+        close=None, signals=signals, feature_panel=panel, brl=None,
+        weather=None, posture=P(), label=labels[-1], dwell=1, price=100.0,
+        chg_1w=0.0, chg_1m=0.0, rain_z=rain_z[-1], dry_frac=None,
+        brl_chg_21d=None, price_asof="", weather_asof="", brl_asof="")
+
+
+def test_compute_changes_finds_transitions():
+    s = _mini_state(["calm_bull", "calm_bull", "stressed", "stressed"],
+                    [0.0, 0.0, -3.0, -3.0])   # June: filling, d_w 0.5 → band flip
+    changes = build_site.compute_changes(s)
+    types = {c["type"] for c in changes}
+    assert "regime_change" in types and "stress_band_change" in types
+    reg = [c for c in changes if c["type"] == "regime_change"][0]
+    assert reg["from"] == "calm_bull" and reg["to"] == "stressed"
+    dates = [c["date"] for c in changes]
+    assert dates == sorted(dates, reverse=True)     # newest first
+
+
+def test_compute_changes_projected_band_from_snapshots():
+    s = _mini_state(["calm_bull", "calm_bull"], [0.0, 0.0])
+    snaps = [{"date_issued": "2026-06-01", "projected_band": "low"},
+             {"date_issued": "2026-06-02", "projected_band": "elevated"}]
+    changes = build_site.compute_changes(s, snapshots=snaps)
+    proj = [c for c in changes if c["type"] == "projected_stress_band_change"]
+    assert len(proj) == 1
+    assert proj[0]["from"] == "low" and proj[0]["to"] == "elevated"
+
+
+def test_compute_changes_no_changes_is_empty():
+    s = _mini_state(["calm_bull", "calm_bull"], [0.0, 0.0])
+    assert build_site.compute_changes(s, snapshots=[]) == []
+
+
+def test_changes_json_and_alerts_feed_in_build(built):
+    import json
+    import xml.etree.ElementTree as ET
+    payload = json.loads((built / "api" / "changes.json").read_text())
+    assert payload["schema_version"] == 1
+    assert isinstance(payload["changes"], list)
+    root = ET.fromstring((built / "alerts.xml").read_text())
+    assert root.tag == "rss"
+
+
+def test_ledger_section_shows_forecast_verification_young():
+    from ascentagri.agronomy.forecast import ForecastVerification
+    from ascentagri.ledger import score_ledger
+    score = score_ledger([])
+    ver = ForecastVerification(
+        n_snapshots=3, n_closed=0, mae_forecast_mm=0.0,
+        mae_climatology_mm=0.0, bias_mm=0.0, skill=0.0, band_hit_rate=0.0,
+        first_scoreable="2026-07-25")
+    html = build_site.render_ledger_section(score, False, verification=ver)
+    assert "Forecast verification" in html
+    assert "2026-07-25" in html
+
+
+def test_ledger_section_shows_forecast_verification_scored():
+    from ascentagri.agronomy.forecast import ForecastVerification
+    from ascentagri.ledger import score_ledger
+    ver = ForecastVerification(
+        n_snapshots=9, n_closed=6, mae_forecast_mm=12.0,
+        mae_climatology_mm=10.0, bias_mm=3.0, skill=-0.2, band_hit_rate=0.5,
+        first_scoreable=None)
+    html = build_site.render_ledger_section(score_ledger([]), False,
+                                            verification=ver)
+    assert "skill" in html and "-0.20" in html
+    assert "climatology" in html and "does not beat" in html
+
+
+def _load_onepager():
+    spec2 = importlib.util.spec_from_file_location(
+        "onepager", ROOT / "site" / "onepager.py")
+    onepager = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(onepager)
+    return onepager
+
+
+def test_onepager_renders_complete_page():
+    onepager = _load_onepager()
+
+    class P:
+        posture = "defensive"
+        risk_multiplier = 0.65
+    s = build_site.MonitorState(
+        close=None, signals=None, feature_panel=None, brl=None, weather=None,
+        posture=P(), label="stressed", dwell=7, price=250.0, chg_1w=-0.02,
+        chg_1m=0.05, rain_z=-1.2, dry_frac=0.6, brl_chg_21d=0.01,
+        price_asof="2026-07-02", weather_asof="2026-06-28",
+        brl_asof="2026-07-02", crop_stage="fruit filling",
+        crop_stress=0.6, crop_stress_band="watch",
+        farm_gate_line="~94,808 đồng/kg", farm_gate_asof="2026-07-02",
+        outlook=_stub_outlook())
+    html = onepager.render_onepager(
+        s, brief="Test brief sentence.",
+        ledger_line="12 entries · 10 scored days",
+        verification_line="3 forecasts issued, none with a closed window yet",
+        updated="2026-07-04 12:00 UTC")
+    for required in ["This week in one page", "stressed", "2026-07-02",
+                     "2026-06-28", "fruit filling", "Test brief sentence.",
+                     "CC BY 4.0", "not investment advice",
+                     "scottdongkhang.github.io/ascent-agri",
+                     "@media print"]:
+        assert required in html, f"missing: {required!r}"
+    assert "<img" not in html          # self-contained: prints without assets
+
+
+def test_onepager_archive_name_fridays_only():
+    from datetime import datetime, timezone
+    onepager = _load_onepager()
+    fri = datetime(2026, 7, 10, 22, 0, tzinfo=timezone.utc)   # a Friday
+    tue = datetime(2026, 7, 7, 22, 0, tzinfo=timezone.utc)
+    assert onepager.archive_name(fri) == "2026-07-10.html"
+    assert onepager.archive_name(tue) is None
+
+
+def test_onepager_written_by_build(built):
+    latest = built / "brief" / "latest.html"
+    assert latest.exists()
+    assert "This week in one page" in latest.read_text()
+
+
 def test_posture_is_known_value(built):
     html = (built / "index.html").read_text()
     assert any(w in html for w in
                ["constructive", "selective", "defensive", "crisis",
                 "uncertain", "neutral"])
+
+
+def _stub_outlook(band="elevated", z=-2.1):
+    class O:
+        issued = "2026-07-06"
+        window_start = "2026-07-06"
+        window_end = "2026-07-19"
+        expected_mm = 38.0
+        norm_mm = 92.0
+        std_mm = 25.0
+        anom_z = z
+        drought_w = 0.5
+        wetness_w = 0.1
+        stage_label = "fruit filling"
+        projected_stress = 1.05
+        projected_band = band
+    return O()
+
+
+def test_forecast_section_renders_honestly():
+    html = build_site.render_forecast_section(_stub_outlook(), has_chart=False)
+    for required in ["The next two weeks", "38", "92", "Open-Meteo",
+                     "2026-07-06", "fruit filling", "elevated"]:
+        assert required in html, f"missing: {required!r}"
+
+
+def test_brief_includes_forward_look():
+    class P:
+        posture = "defensive"
+        risk_multiplier = 0.65
+    base = dict(close=None, signals=None, feature_panel=None, brl=None,
+                weather=None, posture=P(), label="stressed", dwell=7,
+                price=250.0, chg_1w=-0.02, chg_1m=0.05,
+                price_asof="", weather_asof="", brl_asof="",
+                rain_z=0.1, dry_frac=0.5, brl_chg_21d=0.001)
+    with_fc = build_site.MonitorState(**base, outlook=_stub_outlook())
+    without = build_site.MonitorState(**base)
+    b_with = build_site.daily_brief(with_fc)
+    b_without = build_site.daily_brief(without)
+    assert "Looking ahead" in b_with and "38" in b_with
+    assert "Looking ahead" not in b_without
+    vi = build_site.daily_brief_vi(with_fc)
+    assert "14 ngày" in vi
+
+
+def test_api_latest_has_forecast_key(built):
+    import json
+    latest = json.loads((built / "api" / "latest.json").read_text())
+    assert "forecast" in latest            # object when cache present, else null
+    if latest["forecast"] is not None:
+        f = latest["forecast"]
+        assert f["source"] == "Open-Meteo forecast model"
+        assert f["projected_band"] in {"low", "watch", "elevated", "severe"}
+        assert "issued" in f and "expected_rain_mm" in f
 
 
 def test_daily_brief_templates():

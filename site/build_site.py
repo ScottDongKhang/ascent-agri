@@ -35,6 +35,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from onepager import archive_name, render_onepager   # noqa: E402
 
 from ascentagri.agronomy.economics import (                       # noqa: E402
     load_usdvnd, transmission_line, transmission_line_vi)
@@ -127,6 +130,7 @@ class MonitorState:
     farm_gate_line: Optional[str] = None
     farm_gate_line_vi: Optional[str] = None
     farm_gate_asof: str = ""
+    outlook: Optional[object] = None  # ForwardOutlook when the cache is fresh
 
 
 def load_inputs() -> "tuple[pd.Series, pd.Series, pd.DataFrame]":
@@ -210,6 +214,24 @@ def compute_state(close: pd.Series, brl: pd.Series,
         except Exception as exc:
             log.warning("farm-gate layer skipped: %s", exc)
 
+    # forward look (optional layer: forecast cache must exist and be fresh;
+    # any failure → outlook silently absent, never a blocker)
+    outlook = None
+    try:
+        from ascentagri.agronomy.forecast import compute_outlook, load_forecast
+        loaded = load_forecast()
+        if loaded is not None:
+            fc_frame, issued = loaded
+            age = (pd.Timestamp.today().normalize()
+                   - issued.normalize()).days
+            if age <= 3:
+                outlook = compute_outlook(fc_frame, weather,
+                                          issued=str(issued.date()))
+            else:
+                log.warning("forecast cache stale (%dd) — skipped", age)
+    except Exception as exc:
+        log.warning("forecast layer skipped: %s", exc)
+
     return MonitorState(
         close=close, signals=signals, feature_panel=panel, brl=brl,
         weather=weather, posture=posture, label=label, dwell=dwell,
@@ -225,6 +247,7 @@ def compute_state(close: pd.Series, brl: pd.Series,
         farm_gate_line=farm_gate_line,
         farm_gate_line_vi=farm_gate_line_vi,
         farm_gate_asof=farm_gate_asof,
+        outlook=outlook,
     )
 
 
@@ -274,6 +297,14 @@ def daily_brief(s: MonitorState) -> str:
             parts.append(
                 f"The Brazilian real is little changed on the month "
                 f"({s.brl_chg_21d:+.1%}) — a neutral currency backdrop.")
+    if s.outlook is not None:
+        o = s.outlook
+        parts.append(
+            f"Looking ahead: the 14-day forecast calls for "
+            f"{o.expected_mm:.0f} mm of rain in the robusta belt against a "
+            f"{o.norm_mm:.0f} mm seasonal norm ({o.anom_z:+.1f}σ) — projected "
+            f"crop stress: {o.projected_band} (Open-Meteo forecast model, "
+            f"issued {o.issued}; skill scored publicly as windows close).")
     return " ".join(parts)
 
 
@@ -404,6 +435,18 @@ def render_api_latest(s: MonitorState, brief: str) -> str:
             "as_of": s.farm_gate_asof,
             "note": "futures-equivalent VND/kg, before local basis",
         } if s.farm_gate_line else None),
+        "forecast": ({
+            "source": "Open-Meteo forecast model",
+            "issued": s.outlook.issued,
+            "window": [s.outlook.window_start, s.outlook.window_end],
+            "expected_rain_mm": round(s.outlook.expected_mm, 1),
+            "seasonal_norm_mm": round(s.outlook.norm_mm, 1),
+            "anom_z": round(s.outlook.anom_z, 2),
+            "projected_stress": round(s.outlook.projected_stress, 3),
+            "projected_band": s.outlook.projected_band,
+            "note": ("forward-looking model output; verified against realized "
+                     "rainfall in the public track record as windows close"),
+        } if s.outlook is not None else None),
         "fx": {
             "brl_usd_chg_21d": round(s.brl_chg_21d, 5)
             if s.brl_chg_21d is not None else None,
@@ -427,6 +470,95 @@ def render_api_history(s: MonitorState) -> str:
             df[col] = s.feature_panel[col].reindex(df.index).round(4)
     df.index.name = "date"
     return df.to_csv(date_format="%Y-%m-%d")
+
+
+def compute_changes(s: MonitorState, snapshots: "list[dict] | None" = None,
+                    n: int = 20) -> "list[dict]":
+    """State CHANGES only (not daily state), for pollers: regime label flips,
+    stress-band crossings, and projected-band flips from the snapshot ledger.
+    Derived deterministically from already-committed history — no state file."""
+    events = []
+
+    lab = s.signals["label"].astype(str)
+    flips = lab[lab != lab.shift(1)].iloc[1:]         # first row has no prior
+    for date in flips.index:
+        pos = lab.index.get_loc(date)
+        events.append({"date": str(date.date()), "type": "regime_change",
+                       "from": str(lab.iloc[pos - 1]), "to": str(lab.loc[date])})
+
+    if s.feature_panel is not None and "rain_anom_30d" in s.feature_panel:
+        z = s.feature_panel["rain_anom_30d"].dropna()
+        if len(z) > 1:
+            bands = crop_stress_index(z).map(stress_label)
+            bflips = bands[bands != bands.shift(1)].iloc[1:]
+            for date in bflips.index:
+                pos = bands.index.get_loc(date)
+                events.append({"date": str(date.date()),
+                               "type": "stress_band_change",
+                               "from": str(bands.iloc[pos - 1]),
+                               "to": str(bands.loc[date])})
+
+    prev = None
+    for e in (snapshots or []):
+        band = e.get("projected_band")
+        if prev is not None and band != prev:
+            events.append({"date": e["date_issued"],
+                           "type": "projected_stress_band_change",
+                           "from": prev, "to": band})
+        prev = band
+
+    events.sort(key=lambda d: (d["date"], d["type"]))
+    return list(reversed(events[-n:]))                 # newest first
+
+
+def render_changes_json(changes: "list[dict]") -> str:
+    import json
+    return json.dumps({
+        "schema_version": 1,
+        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "doc": ("State changes only — poll this instead of scraping the page. "
+                "Types: regime_change, stress_band_change, "
+                "projected_stress_band_change. Newest first."),
+        "changes": changes,
+        "attribution": API_ATTRIBUTION,
+        "license": API_LICENSE,
+    }, indent=2)
+
+
+def render_alerts_feed(changes: "list[dict]", site_url: str) -> str:
+    """RSS that fires ONLY on state changes — the subscription for people who
+    want to hear from the monitor only when something moved."""
+    from email.utils import format_datetime
+    from xml.sax.saxutils import escape
+    items = []
+    for c in changes:
+        d = (pd.Timestamp(c["date"]).to_pydatetime()
+             .replace(hour=21, minute=30, tzinfo=timezone.utc))
+        title = escape(f"{c['type'].replace('_', ' ')}: "
+                       f"{c['from']} → {c['to']} ({c['date']})")
+        items.append(
+            f"    <item>\n"
+            f"      <title>{title}</title>\n"
+            f"      <link>{site_url}</link>\n"
+            f"      <guid isPermaLink=\"false\">ascent-agri-alert-"
+            f"{c['type']}-{c['date']}</guid>\n"
+            f"      <pubDate>{format_datetime(d)}</pubDate>\n"
+            f"      <description>{title}</description>\n"
+            f"    </item>")
+    now = format_datetime(datetime.now(timezone.utc))
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        "  <channel>\n"
+        "    <title>Robusta Coffee Monitor — alerts</title>\n"
+        f"    <link>{site_url}</link>\n"
+        "    <description>Fires only when the regime or crop-stress state "
+        "changes.</description>\n"
+        f"    <lastBuildDate>{now}</lastBuildDate>\n"
+        + "\n".join(items) + "\n"
+        "  </channel>\n"
+        "</rss>\n"
+    )
 
 
 def chart_long_view(s: MonitorState, out: Path):
@@ -509,6 +641,45 @@ def render_brazil_section(brazil_asof: str) -> str:
 """
 
 
+def chart_forecast(outlook, fc_frame: pd.DataFrame, out: Path):
+    """Daily forecast rainfall bars with the seasonal-norm daily average."""
+    days = fc_frame["rain_mm"].iloc[:14]
+    fig, ax = plt.subplots(figsize=(9.6, 3.2))
+    ax.bar(days.index, days.values, width=0.7, color=BLUE,
+           label="forecast rain (mm/day)")
+    ax.axhline(outlook.norm_mm / 14.0, color=YELLOW, lw=1.4, ls="--",
+               label="seasonal norm (daily avg)")
+    ax.set_ylabel("mm/day")
+    ax.legend(loc="upper left", fontsize=8.5)
+    ax.xaxis.set_major_formatter(
+        mdates.ConciseDateFormatter(mdates.AutoDateLocator()))
+    _save(fig, out)
+
+
+def render_forecast_section(outlook, has_chart: bool) -> str:
+    o = outlook
+    chart_html = ('<figure><img src="assets/forecast.png" '
+                  'alt="14-day rainfall forecast vs seasonal norm"></figure>'
+                  if has_chart else "")
+    return f"""
+<section>
+  <h2>The next two weeks</h2>
+  <p class="asof">Open-Meteo forecast model · issued {o.issued} ·
+  window {o.window_start} → {o.window_end} · crop stage: {o.stage_label}</p>
+  <p class="asof"><strong style="color:var(--ink)">{o.expected_mm:.0f} mm
+  expected vs {o.norm_mm:.0f} mm seasonal norm ({o.anom_z:+.1f}σ) —
+  projected stress: {o.projected_band}</strong></p>
+  {chart_html}
+  <figcaption style="color:var(--muted);font-size:13.5px;max-width:720px">
+  The only forward-looking panel on this page — and therefore the one that
+  gets scored. Every issued forecast is committed to an append-only ledger
+  before the outcome is known and verified against realized rainfall once the
+  window closes (see the track record below). Until enough windows close,
+  treat this as an unverified model output, not a fact.</figcaption>
+</section>
+"""
+
+
 LEDGER_CHART_MIN_DAYS = 10
 
 
@@ -532,9 +703,38 @@ def chart_ledger(score: LedgerScore, out: Path) -> bool:
     return True
 
 
-def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
+def render_ledger_section(score: LedgerScore, has_chart: bool,
+                          verification=None) -> str:
+    from ascentagri.agronomy.forecast import MIN_VERIFIED_WINDOWS
     raw_url = ("https://github.com/ScottDongKhang/ascent-agri/blob/main/"
                "data/ledger/forecasts.jsonl")
+    snap_url = ("https://github.com/ScottDongKhang/ascent-agri/blob/main/"
+                "data/ledger/weather_forecasts.jsonl")
+    if verification is None or verification.n_snapshots == 0:
+        ver_html = ""
+    elif verification.n_closed < MIN_VERIFIED_WINDOWS:
+        when = (f" First scored table appears after {MIN_VERIFIED_WINDOWS} "
+                f"closed windows"
+                + (f" (~{verification.first_scoreable})."
+                   if verification.first_scoreable else "."))
+        ver_html = (
+            f'<h3 style="margin-top:24px;font-size:16px">Forecast '
+            f'verification</h3>'
+            f'<p class="asof">{verification.n_snapshots} rainfall forecasts '
+            f'issued and committed; {verification.n_closed} windows closed.'
+            f'{when} <a href="{snap_url}">Inspect the raw snapshots</a>.</p>')
+    else:
+        v = verification
+        verdict = ("beats" if v.skill > 0 else "does not beat")
+        ver_html = (
+            f'<h3 style="margin-top:24px;font-size:16px">Forecast '
+            f'verification</h3>'
+            f'<p class="asof">{v.n_closed} closed 14-day windows · forecast '
+            f'MAE {v.mae_forecast_mm:.1f} mm vs climatology '
+            f'{v.mae_climatology_mm:.1f} mm · skill {v.skill:+.2f} '
+            f'({verdict} the climatology baseline) · bias {v.bias_mm:+.1f} mm '
+            f'· stress-band hit rate {v.band_hit_rate:.0%} · '
+            f'<a href="{snap_url}">raw snapshots</a>.</p>')
     if score.n_entries == 0:
         body = "<p class=\"asof\">The ledger opens with the next daily run.</p>"
     elif score.n_scored_days == 0:
@@ -560,6 +760,7 @@ def render_ledger_section(score: LedgerScore, has_chart: bool) -> str:
   scoring uses only the prices recorded in the ledger itself, with a 1-day
   execution delay. If the model is wrong, this section says so forever.</p>
   {body}
+  {ver_html}
   <ul><li><a href="{raw_url}">Inspect the raw ledger on GitHub</a></li></ul>
 </section>
 """
@@ -611,6 +812,13 @@ def daily_brief_vi(s: MonitorState) -> str:
             parts.append(
                 f"Đồng real Brazil ít thay đổi trong tháng "
                 f"({s.brl_chg_21d:+.1%}), bối cảnh tiền tệ trung tính.")
+    if s.outlook is not None:
+        o = s.outlook
+        parts.append(
+            f"Dự báo 14 ngày tới: khoảng {o.expected_mm:.0f} mm mưa so với "
+            f"mức trung bình mùa vụ {o.norm_mm:.0f} mm ({o.anom_z:+.1f}σ) — "
+            f"mức căng thẳng dự kiến cho cây: "
+            f"{STRESS_VI.get(o.projected_band, o.projected_band)}.")
     return " ".join(parts)
 
 
@@ -827,7 +1035,8 @@ def chart_brl(s: MonitorState, out: Path, lookback_days: int = 730):
 # ── page ────────────────────────────────────────────────────────────────────
 
 def render_html(s: MonitorState, brief: str, ledger_html: str = "",
-                long_view_html: str = "", brazil_html: str = "") -> str:
+                long_view_html: str = "", brazil_html: str = "",
+                forecast_html: str = "") -> str:
     p = s.posture
     accent = "#" + p.posture_color
     updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -975,6 +1184,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
   </figure>
 </section>
 
+{forecast_html}
+
 {brazil_html}
 
 <section>
@@ -1005,6 +1216,15 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
         daily history of regime labels, risk multipliers and rainfall
         anomalies.</li>
     <li><a href="feed.xml"><code>feed.xml</code></a> — the daily brief as RSS.</li>
+    <li><a href="api/changes.json"><code>api/changes.json</code></a> — state
+        <em>changes</em> only (regime flips, stress-band crossings) — poll
+        this on your schedule instead of scraping the page.</li>
+    <li><a href="alerts.xml"><code>alerts.xml</code></a> — the same changes as
+        an RSS feed: fires only when something moved (pairs well with any
+        RSS-to-email bridge).</li>
+    <li><a href="brief/latest.html"><code>brief/latest.html</code></a> — the
+        week on one printable page (Cmd/Ctrl+P → PDF); Friday editions are
+        archived by date.</li>
     <li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">the
         public ledger</a> — the model's append-only, scoreable track record.</li>
   </ul>
@@ -1063,6 +1283,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
   CC BY 4.0 — free to use with attribution.</p>
   <p>Built by Scott Dong ·
   <a href="feed.xml">RSS daily brief</a> ·
+  <a href="alerts.xml">alerts feed</a> ·
+  <a href="brief/latest.html">weekly one-pager</a> ·
   <a href="https://github.com/ScottDongKhang/ascent-agri/issues">suggest a
   feature or report something wrong</a> · last updated {updated}</p>
 </footer>
@@ -1102,7 +1324,14 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
 
     ledger_score = score_ledger(read_ledger())
     has_ledger_chart = chart_ledger(ledger_score, assets / "ledger.png")
-    ledger_html = render_ledger_section(ledger_score, has_ledger_chart)
+    forecast_ver = None
+    try:
+        from ascentagri.agronomy.forecast import score_snapshots
+        forecast_ver = score_snapshots()
+    except Exception as exc:
+        log.warning("forecast verification skipped: %s", exc)
+    ledger_html = render_ledger_section(ledger_score, has_ledger_chart,
+                                        verification=forecast_ver)
 
     # long-view trend chart (always available — same close series)
     chart_long_view(state, assets / "long_view.png")
@@ -1119,8 +1348,21 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     except Exception as exc:
         log.warning("Brazil panel skipped: %s", exc)
 
+    # forward look — optional layer, never publish-blocking
+    forecast_html = ""
+    if state.outlook is not None:
+        try:
+            from ascentagri.agronomy.forecast import load_forecast
+            fc_frame, _ = load_forecast()
+            chart_forecast(state.outlook, fc_frame, assets / "forecast.png")
+            forecast_html = render_forecast_section(state.outlook, True)
+        except Exception as exc:
+            log.warning("forecast chart skipped: %s", exc)
+            forecast_html = render_forecast_section(state.outlook, False)
+
     (out_dir / "index.html").write_text(render_html(
-        state, brief, ledger_html, long_view_html, brazil_html))
+        state, brief, ledger_html, long_view_html, brazil_html,
+        forecast_html=forecast_html))
     (out_dir / ".nojekyll").write_text("")
 
     vi_dir = out_dir / "vi"
@@ -1134,6 +1376,30 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     api_dir.mkdir(parents=True, exist_ok=True)
     (api_dir / "latest.json").write_text(render_api_latest(state, brief))
     (api_dir / "history.csv").write_text(render_api_history(state))
+
+    # fire-on-change surfaces for pollers
+    snapshots = []
+    try:
+        from ascentagri.agronomy.forecast import read_snapshots
+        snapshots = read_snapshots()
+    except Exception as exc:
+        log.warning("snapshot read skipped: %s", exc)
+    changes = compute_changes(state, snapshots=snapshots)
+    (api_dir / "changes.json").write_text(render_changes_json(changes))
+    (out_dir / "alerts.xml").write_text(render_alerts_feed(changes, site_url))
+
+    # weekly one-pager — rebuilt daily, archived on Fridays
+    brief_dir = out_dir / "brief"
+    brief_dir.mkdir(parents=True, exist_ok=True)
+    updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    ver_line = (forecast_ver.summary_line() if forecast_ver is not None
+                else "forecast layer not yet live")
+    onepager_html = render_onepager(state, brief, ledger_score.summary_line(),
+                                    ver_line, updated)
+    (brief_dir / "latest.html").write_text(onepager_html)
+    arch = archive_name()
+    if arch:
+        (brief_dir / arch).write_text(onepager_html)
 
     paper = ROOT / "docs" / "research" / "weather-and-coffee-returns.pdf"
     if paper.exists():
