@@ -81,3 +81,76 @@ def load_forecast() -> "tuple[pd.DataFrame, pd.Timestamp] | None":
     df = pd.read_csv(FORECAST_CACHE, parse_dates=["date", "issued"])
     issued = df["issued"].iloc[0]
     return df.set_index("date")[["rain_mm"]].sort_index(), issued
+
+
+# ── seasonal norm + forward outlook ─────────────────────────────────────────
+
+def seasonal_norm(rain: pd.Series, window_start: pd.Timestamp,
+                  days: int = FORECAST_WINDOW_DAYS) -> "tuple[float, float, int]":
+    """Mean/std of total rainfall over the same calendar window in every
+    complete prior year of the history. Same-source norm (Open-Meteo history)
+    so forecast and norm are comparable."""
+    rain = rain.dropna().sort_index()
+    window_start = pd.Timestamp(window_start)
+    totals = []
+    for year in range(int(rain.index[0].year), int(window_start.year)):
+        try:
+            start_y = window_start.replace(year=year)
+        except ValueError:                    # Feb 29 in a non-leap year
+            start_y = window_start.replace(year=year, day=28)
+        window = rain.loc[start_y:start_y + pd.Timedelta(days=days - 1)]
+        if len(window) < days:                # incomplete coverage — skip year
+            continue
+        totals.append(float(window.sum()))
+    if len(totals) < MIN_NORM_YEARS:
+        raise ValueError(
+            f"seasonal norm needs >= {MIN_NORM_YEARS} complete prior-year "
+            f"windows at {window_start.date()}, got {len(totals)}")
+    arr = np.asarray(totals)
+    return float(arr.mean()), float(arr.std(ddof=1)), len(totals)
+
+
+@dataclass(frozen=True)
+class ForwardOutlook:
+    issued: str            # YYYY-MM-DD the forecast was issued
+    window_start: str
+    window_end: str
+    expected_mm: float
+    norm_mm: float
+    std_mm: float
+    anom_z: float
+    drought_w: float       # day-weighted phenology weights over the window —
+    wetness_w: float       #   stored so verification is reproducible later
+    stage_label: str       # the stage covering most of the window
+    projected_stress: float
+    projected_band: str
+
+
+def _stress_from(z: float, drought_w: float, wetness_w: float) -> float:
+    return drought_w * max(0.0, -z) + wetness_w * max(0.0, z)
+
+
+def compute_outlook(forecast: pd.DataFrame, history: pd.DataFrame,
+                    days: int = FORECAST_WINDOW_DAYS,
+                    issued: "str | None" = None) -> ForwardOutlook:
+    """The 14-day forward read: expected rainfall vs seasonal norm, weighted
+    by which crop stage the window lands on (day-weighted across boundaries)."""
+    window = forecast["rain_mm"].sort_index().iloc[:days]
+    if len(window) < days:
+        raise ValueError(f"forecast has {len(window)} days; need {days}")
+    expected = float(window.fillna(0.0).sum())
+    norm, std, _ = seasonal_norm(history["rain_mm"], window.index[0], days)
+    z = 0.0 if std < 1e-9 else (expected - norm) / std
+    day_stages = [stage_for(d) for d in window.index]
+    d_w = float(np.mean([s.drought_weight for s in day_stages]))
+    w_w = float(np.mean([s.wetness_weight for s in day_stages]))
+    labels = [s.label for s in day_stages]
+    stress = _stress_from(z, d_w, w_w)
+    return ForwardOutlook(
+        issued=issued or str(dt.date.today()),
+        window_start=str(window.index[0].date()),
+        window_end=str(window.index[-1].date()),
+        expected_mm=expected, norm_mm=norm, std_mm=std, anom_z=float(z),
+        drought_w=d_w, wetness_w=w_w,
+        stage_label=max(set(labels), key=labels.count),
+        projected_stress=float(stress), projected_band=stress_label(stress))
