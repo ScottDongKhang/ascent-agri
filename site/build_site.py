@@ -35,6 +35,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from onepager import archive_name, render_onepager   # noqa: E402
 
 from ascentagri.agronomy.economics import (                       # noqa: E402
     load_usdvnd, transmission_line, transmission_line_vi)
@@ -1219,6 +1222,9 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
     <li><a href="alerts.xml"><code>alerts.xml</code></a> — the same changes as
         an RSS feed: fires only when something moved (pairs well with any
         RSS-to-email bridge).</li>
+    <li><a href="brief/latest.html"><code>brief/latest.html</code></a> — the
+        week on one printable page (Cmd/Ctrl+P → PDF); Friday editions are
+        archived by date.</li>
     <li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">the
         public ledger</a> — the model's append-only, scoreable track record.</li>
   </ul>
@@ -1277,6 +1283,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
   CC BY 4.0 — free to use with attribution.</p>
   <p>Built by Scott Dong ·
   <a href="feed.xml">RSS daily brief</a> ·
+  <a href="alerts.xml">alerts feed</a> ·
+  <a href="brief/latest.html">weekly one-pager</a> ·
   <a href="https://github.com/ScottDongKhang/ascent-agri/issues">suggest a
   feature or report something wrong</a> · last updated {updated}</p>
 </footer>
@@ -1379,6 +1387,19 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     changes = compute_changes(state, snapshots=snapshots)
     (api_dir / "changes.json").write_text(render_changes_json(changes))
     (out_dir / "alerts.xml").write_text(render_alerts_feed(changes, site_url))
+
+    # weekly one-pager — rebuilt daily, archived on Fridays
+    brief_dir = out_dir / "brief"
+    brief_dir.mkdir(parents=True, exist_ok=True)
+    updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    ver_line = (forecast_ver.summary_line() if forecast_ver is not None
+                else "forecast layer not yet live")
+    onepager_html = render_onepager(state, brief, ledger_score.summary_line(),
+                                    ver_line, updated)
+    (brief_dir / "latest.html").write_text(onepager_html)
+    arch = archive_name()
+    if arch:
+        (brief_dir / arch).write_text(onepager_html)
 
     paper = ROOT / "docs" / "research" / "weather-and-coffee-returns.pdf"
     if paper.exists():

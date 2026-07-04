@@ -259,6 +259,58 @@ def test_ledger_section_shows_forecast_verification_scored():
     assert "climatology" in html and "does not beat" in html
 
 
+def _load_onepager():
+    spec2 = importlib.util.spec_from_file_location(
+        "onepager", ROOT / "site" / "onepager.py")
+    onepager = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(onepager)
+    return onepager
+
+
+def test_onepager_renders_complete_page():
+    onepager = _load_onepager()
+
+    class P:
+        posture = "defensive"
+        risk_multiplier = 0.65
+    s = build_site.MonitorState(
+        close=None, signals=None, feature_panel=None, brl=None, weather=None,
+        posture=P(), label="stressed", dwell=7, price=250.0, chg_1w=-0.02,
+        chg_1m=0.05, rain_z=-1.2, dry_frac=0.6, brl_chg_21d=0.01,
+        price_asof="2026-07-02", weather_asof="2026-06-28",
+        brl_asof="2026-07-02", crop_stage="fruit filling",
+        crop_stress=0.6, crop_stress_band="watch",
+        farm_gate_line="~94,808 đồng/kg", farm_gate_asof="2026-07-02",
+        outlook=_stub_outlook())
+    html = onepager.render_onepager(
+        s, brief="Test brief sentence.",
+        ledger_line="12 entries · 10 scored days",
+        verification_line="3 forecasts issued, none with a closed window yet",
+        updated="2026-07-04 12:00 UTC")
+    for required in ["This week in one page", "stressed", "2026-07-02",
+                     "2026-06-28", "fruit filling", "Test brief sentence.",
+                     "CC BY 4.0", "not investment advice",
+                     "scottdongkhang.github.io/ascent-agri",
+                     "@media print"]:
+        assert required in html, f"missing: {required!r}"
+    assert "<img" not in html          # self-contained: prints without assets
+
+
+def test_onepager_archive_name_fridays_only():
+    from datetime import datetime, timezone
+    onepager = _load_onepager()
+    fri = datetime(2026, 7, 10, 22, 0, tzinfo=timezone.utc)   # a Friday
+    tue = datetime(2026, 7, 7, 22, 0, tzinfo=timezone.utc)
+    assert onepager.archive_name(fri) == "2026-07-10.html"
+    assert onepager.archive_name(tue) is None
+
+
+def test_onepager_written_by_build(built):
+    latest = built / "brief" / "latest.html"
+    assert latest.exists()
+    assert "This week in one page" in latest.read_text()
+
+
 def test_posture_is_known_value(built):
     html = (built / "index.html").read_text()
     assert any(w in html for w in
