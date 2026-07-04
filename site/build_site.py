@@ -429,6 +429,86 @@ def render_api_history(s: MonitorState) -> str:
     return df.to_csv(date_format="%Y-%m-%d")
 
 
+def chart_long_view(s: MonitorState, out: Path):
+    """Full-history price with the 200-day average — the near-to-long-term
+    trend view. Added after feedback from a green-coffee educator that the
+    trade thinks in long trends, not intraday moves."""
+    close = s.close
+    ma200 = close.rolling(200, min_periods=150).mean()
+    fig, ax = plt.subplots(figsize=(9.6, 3.8))
+    ax.plot(close.index, close.values, color=INK, lw=1.1, label="KC=F close")
+    ax.plot(ma200.index, ma200.values, color=YELLOW, lw=1.8,
+            label="200-day average")
+    ax.set_ylabel("¢/lb")
+    ax.legend(loc="upper left", fontsize=8.5)
+    ax.xaxis.set_major_formatter(
+        mdates.ConciseDateFormatter(mdates.AutoDateLocator()))
+    _save(fig, out)
+
+
+FROST_RISK_TMIN_C = 6.0
+
+
+def chart_brazil(wx_br: pd.DataFrame, out: Path, lookback: int = 1095):
+    """Sul de Minas (arabica belt) growing conditions: 30-day rainfall
+    anomaly + minimum temperature with the frost-risk line."""
+    from ascentagri.research.weather_study import rain_anomaly
+    anom = rain_anomaly(wx_br).iloc[-lookback:]
+    tmin = wx_br["tmin_c"].astype(float).iloc[-lookback:]
+    fig, axes = plt.subplots(2, 1, figsize=(9.6, 5.2), sharex=True)
+    axes[0].plot(anom.index, anom.values, color=AQUA, lw=1.3)
+    axes[0].axhline(0, color=MUTED, lw=0.8)
+    axes[0].axhspan(-3.5, -1.0, color=YELLOW, alpha=0.08, lw=0)
+    axes[0].set_ylabel("z-score")
+    axes[0].set_title("30-day rainfall anomaly vs trailing year — Varginha, "
+                      "Sul de Minas", loc="left", fontsize=9.5, color=MUTED)
+    axes[1].plot(tmin.index, tmin.values, color=BLUE, lw=1.0)
+    axes[1].axhline(FROST_RISK_TMIN_C, color="#e66767", lw=1.2, ls="--")
+    axes[1].set_ylabel("min temp (°C)")
+    axes[1].set_title("Daily minimum temperature — dashed line = frost-risk "
+                      "threshold (the July 2021 frost drove arabica +34% in "
+                      "five sessions)", loc="left", fontsize=9.5, color=MUTED)
+    axes[1].xaxis.set_major_formatter(
+        mdates.ConciseDateFormatter(mdates.AutoDateLocator()))
+    fig.tight_layout()
+    _save(fig, out)
+
+
+def render_long_view_section(s: MonitorState) -> str:
+    return f"""
+<section>
+  <h2>The long view</h2>
+  <p class="asof">full price history through {s.price_asof}</p>
+  <figure>
+    <img src="assets/long_view.png" alt="Full coffee price history with 200-day average">
+    <figcaption>The market most of the trade actually discusses: price
+    against its 200-day average, full history. Green-coffee buyers hedge and
+    reprice off moves like these, not intraday noise — this view exists
+    because an importer's education team told us that's the horizon they
+    teach.</figcaption>
+  </figure>
+</section>
+"""
+
+
+def render_brazil_section(brazil_asof: str) -> str:
+    return f"""
+<section>
+  <h2>Growing conditions — Sul de Minas, Brazil</h2>
+  <p class="asof">weather data through {brazil_asof} · Varginha, Minas Gerais
+  (−21.55, −45.43) · the arabica side of the market</p>
+  <figure>
+    <img src="assets/brazil.png" alt="Rainfall anomaly and minimum temperature at Varginha, Sul de Minas">
+    <figcaption>Brazil dominates arabica, and Sul de Minas is its largest
+    belt. Two risks matter here: dry spells (the same anomaly logic as the
+    Vietnam panel) and winter frost — the dashed line marks the frost-risk
+    threshold on daily minimum temperature. Most of the specialty trade buys
+    arabica, so this panel pairs with the benchmark price above.</figcaption>
+  </figure>
+</section>
+"""
+
+
 LEDGER_CHART_MIN_DAYS = 10
 
 
@@ -746,7 +826,8 @@ def chart_brl(s: MonitorState, out: Path, lookback_days: int = 730):
 
 # ── page ────────────────────────────────────────────────────────────────────
 
-def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
+def render_html(s: MonitorState, brief: str, ledger_html: str = "",
+                long_view_html: str = "", brazil_html: str = "") -> str:
     p = s.posture
     accent = "#" + p.posture_color
     updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -871,6 +952,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
   </figure>
 </section>
 
+{long_view_html}
+
 <section>
   <h2>Growing conditions — Central Highlands, Vietnam</h2>
   <p class="asof">weather data through {s.weather_asof} · Buon Ma Thuot, Dak Lak
@@ -891,6 +974,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "") -> str:
     squeezes.</figcaption>
   </figure>
 </section>
+
+{brazil_html}
 
 <section>
   <h2>Currency driver — the Brazilian real</h2>
@@ -1019,7 +1104,23 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     has_ledger_chart = chart_ledger(ledger_score, assets / "ledger.png")
     ledger_html = render_ledger_section(ledger_score, has_ledger_chart)
 
-    (out_dir / "index.html").write_text(render_html(state, brief, ledger_html))
+    # long-view trend chart (always available — same close series)
+    chart_long_view(state, assets / "long_view.png")
+    long_view_html = render_long_view_section(state)
+
+    # Brazil / arabica panel — optional layer, never publish-blocking
+    brazil_html = ""
+    try:
+        from ascentagri.macro_fetch import load_weather_brazil
+        wx_br = load_weather_brazil()
+        if wx_br is not None and len(wx_br) > 400:
+            chart_brazil(wx_br, assets / "brazil.png")
+            brazil_html = render_brazil_section(str(wx_br.index[-1].date()))
+    except Exception as exc:
+        log.warning("Brazil panel skipped: %s", exc)
+
+    (out_dir / "index.html").write_text(render_html(
+        state, brief, ledger_html, long_view_html, brazil_html))
     (out_dir / ".nojekyll").write_text("")
 
     vi_dir = out_dir / "vi"

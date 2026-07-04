@@ -98,6 +98,25 @@ def test_api_endpoints(built):
     assert "close" not in rows[0], "no raw prices in history endpoint"
 
 
+def test_long_view_section(built):
+    html = (built / "index.html").read_text()
+    assert "The long view" in html
+    assert "200-day average" in html
+    png = built / "assets" / "long_view.png"
+    assert png.exists() and png.stat().st_size > 10_000
+
+
+def test_brazil_section_when_cache_present(built):
+    from ascentagri.macro_fetch import WEATHER_BRAZIL_PATH
+    if not WEATHER_BRAZIL_PATH.exists():
+        pytest.skip("Sul de Minas cache absent")
+    html = (built / "index.html").read_text()
+    assert "Sul de Minas, Brazil" in html
+    assert "frost" in html
+    png = built / "assets" / "brazil.png"
+    assert png.exists() and png.stat().st_size > 10_000
+
+
 def test_vietnamese_grower_page(built):
     vi = (built / "vi" / "index.html").read_text()
     for required in [
