@@ -179,6 +179,77 @@ def append_snapshot(outlook: ForwardOutlook, path: Path = SNAPSHOT_PATH) -> bool
     return True
 
 
+# ── verification: skill vs climatology ──────────────────────────────────────
+
+@dataclass
+class ForecastVerification:
+    n_snapshots: int
+    n_closed: int
+    mae_forecast_mm: float
+    mae_climatology_mm: float
+    bias_mm: float                 # mean(expected − realized): + = too wet
+    skill: float                   # 1 − MAE_forecast / MAE_climatology
+    band_hit_rate: float           # projected band == realized band
+    first_scoreable: Optional[str]
+
+    def summary_line(self) -> str:
+        if self.n_closed == 0:
+            when = (f" — first window scoreable ~{self.first_scoreable}"
+                    if self.first_scoreable else "")
+            return (f"{self.n_snapshots} forecasts issued, none with a closed "
+                    f"window yet: not yet scoreable{when}.")
+        return (f"{self.n_closed}/{self.n_snapshots} windows closed · "
+                f"forecast MAE {self.mae_forecast_mm:.1f}mm vs climatology "
+                f"{self.mae_climatology_mm:.1f}mm · skill {self.skill:+.2f} · "
+                f"bias {self.bias_mm:+.1f}mm · band hit rate "
+                f"{self.band_hit_rate:.0%}")
+
+
+def score_snapshots(entries: "List[Dict] | None" = None,
+                    rain: "pd.Series | None" = None) -> ForecastVerification:
+    """Score every issued forecast whose window has fully closed, against
+    realized rainfall — reproducible from the committed snapshot ledger and
+    the weather cache alone."""
+    entries = read_snapshots() if entries is None else sorted(
+        entries, key=lambda e: e["date_issued"])
+    if rain is None:
+        rain = load_weather()["rain_mm"]
+    rain = rain.dropna().sort_index()
+
+    err_f, err_c, bias, hits = [], [], [], []
+    for e in entries:
+        start, end = pd.Timestamp(e["window_start"]), pd.Timestamp(e["window_end"])
+        window = rain.loc[start:end]
+        if len(window) < (end - start).days + 1:      # window not closed yet
+            continue
+        realized = float(window.sum())
+        err_f.append(abs(e["expected_mm"] - realized))
+        err_c.append(abs(e["norm_mm"] - realized))
+        bias.append(e["expected_mm"] - realized)
+        std = float(e.get("std_mm", 0.0))
+        rz = 0.0 if std < 1e-9 else (realized - e["norm_mm"]) / std
+        realized_band = stress_label(
+            _stress_from(rz, e["drought_w"], e["wetness_w"]))
+        hits.append(1.0 if realized_band == e["projected_band"] else 0.0)
+
+    n_closed = len(err_f)
+    first = None
+    if entries and n_closed == 0:
+        first = str((pd.Timestamp(entries[0]["window_end"])
+                     + pd.Timedelta(days=ARCHIVE_LAG_DAYS)).date())
+    if n_closed == 0:
+        return ForecastVerification(len(entries), 0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                    first)
+    mae_f, mae_c = float(np.mean(err_f)), float(np.mean(err_c))
+    return ForecastVerification(
+        n_snapshots=len(entries), n_closed=n_closed,
+        mae_forecast_mm=mae_f, mae_climatology_mm=mae_c,
+        bias_mm=float(np.mean(bias)),
+        skill=0.0 if mae_c < 1e-9 else 1.0 - mae_f / mae_c,
+        band_hit_rate=float(np.mean(hits)),
+        first_scoreable=None)
+
+
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 def main(argv: "list[str] | None" = None) -> int:

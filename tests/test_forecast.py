@@ -146,3 +146,45 @@ def test_snapshot_append_is_idempotent_per_day(tmp_path):
     assert fc.append_snapshot(_outlook("2026-07-06", band="severe"),
                               path=path) is False
     assert path.read_text() == before          # never edited, never duplicated
+
+
+def _snapshot(issued, start, end, expected, norm=28.0, std=4.0, band="low",
+              d_w=0.5, w_w=0.1):
+    return {"schema": 1, "date_issued": issued, "window_start": start,
+            "window_end": end, "expected_mm": expected, "norm_mm": norm,
+            "std_mm": std, "anom_z": (expected - norm) / std,
+            "drought_w": d_w, "wetness_w": w_w,
+            "stage_label": "fruit filling", "projected_stress": 0.0,
+            "projected_band": band}
+
+
+def test_score_snapshots_math():
+    """Realized 28mm on both windows. Forecast said 24 and 36 → MAE 6;
+    climatology (norm 30) → MAE 2. Skill = 1 − 6/2 = −2, published as-is."""
+    rain = pd.Series(2.0, index=pd.date_range("2026-01-01", "2026-03-01"))
+    entries = [
+        _snapshot("2026-01-05", "2026-01-05", "2026-01-18", 24.0, norm=30.0),
+        _snapshot("2026-01-19", "2026-01-19", "2026-02-01", 36.0, norm=30.0),
+    ]
+    ver = fc.score_snapshots(entries, rain=rain)
+    assert ver.n_snapshots == 2 and ver.n_closed == 2
+    assert ver.mae_forecast_mm == pytest.approx(6.0)     # |24-28|, |36-28| → 4,8
+    assert ver.mae_climatology_mm == pytest.approx(2.0)  # |30-28| both
+    assert ver.bias_mm == pytest.approx(2.0)             # (−4 + 8) / 2
+    assert ver.skill == pytest.approx(1 - 6.0 / 2.0)     # negative — published
+    assert 0.0 <= ver.band_hit_rate <= 1.0
+
+
+def test_score_snapshots_open_window_not_scored():
+    rain = pd.Series(2.0, index=pd.date_range("2026-01-01", "2026-01-10"))
+    entries = [_snapshot("2026-01-05", "2026-01-05", "2026-01-18", 24.0)]
+    ver = fc.score_snapshots(entries, rain=rain)
+    assert ver.n_snapshots == 1 and ver.n_closed == 0
+    assert ver.first_scoreable == "2026-01-24"    # window_end + 6-day lag
+    assert "not yet scoreable" in ver.summary_line()
+
+
+def test_score_snapshots_empty():
+    ver = fc.score_snapshots([], rain=pd.Series(dtype=float))
+    assert ver.n_snapshots == 0 and ver.n_closed == 0
+    assert ver.first_scoreable is None
