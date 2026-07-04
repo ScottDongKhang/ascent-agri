@@ -103,9 +103,9 @@ date + 14 days + weekly cadence). Whatever the numbers are — including a
 negative skill score — they are published. If the forecast can't beat
 climatology, the site says so; that honesty is the brand.
 
-**Cadence:** scoring runs in the Monday `weekly-research.yml` job and writes
-`outputs/research/forecast_verification.json`, which the daily site build
-renders.
+**Cadence:** scoring runs at site-build time from the committed snapshot
+ledger and the weather cache — the same pattern as `score_ledger()` — so the
+panel is always as fresh as the page and needs no cross-workflow handoff.
 
 ---
 
