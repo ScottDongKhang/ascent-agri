@@ -127,6 +127,7 @@ class MonitorState:
     farm_gate_line: Optional[str] = None
     farm_gate_line_vi: Optional[str] = None
     farm_gate_asof: str = ""
+    outlook: Optional[object] = None  # ForwardOutlook when the cache is fresh
 
 
 def load_inputs() -> "tuple[pd.Series, pd.Series, pd.DataFrame]":
@@ -210,6 +211,24 @@ def compute_state(close: pd.Series, brl: pd.Series,
         except Exception as exc:
             log.warning("farm-gate layer skipped: %s", exc)
 
+    # forward look (optional layer: forecast cache must exist and be fresh;
+    # any failure → outlook silently absent, never a blocker)
+    outlook = None
+    try:
+        from ascentagri.agronomy.forecast import compute_outlook, load_forecast
+        loaded = load_forecast()
+        if loaded is not None:
+            fc_frame, issued = loaded
+            age = (pd.Timestamp.today().normalize()
+                   - issued.normalize()).days
+            if age <= 3:
+                outlook = compute_outlook(fc_frame, weather,
+                                          issued=str(issued.date()))
+            else:
+                log.warning("forecast cache stale (%dd) — skipped", age)
+    except Exception as exc:
+        log.warning("forecast layer skipped: %s", exc)
+
     return MonitorState(
         close=close, signals=signals, feature_panel=panel, brl=brl,
         weather=weather, posture=posture, label=label, dwell=dwell,
@@ -225,6 +244,7 @@ def compute_state(close: pd.Series, brl: pd.Series,
         farm_gate_line=farm_gate_line,
         farm_gate_line_vi=farm_gate_line_vi,
         farm_gate_asof=farm_gate_asof,
+        outlook=outlook,
     )
 
 
@@ -274,6 +294,14 @@ def daily_brief(s: MonitorState) -> str:
             parts.append(
                 f"The Brazilian real is little changed on the month "
                 f"({s.brl_chg_21d:+.1%}) — a neutral currency backdrop.")
+    if s.outlook is not None:
+        o = s.outlook
+        parts.append(
+            f"Looking ahead: the 14-day forecast calls for "
+            f"{o.expected_mm:.0f} mm of rain in the robusta belt against a "
+            f"{o.norm_mm:.0f} mm seasonal norm ({o.anom_z:+.1f}σ) — projected "
+            f"crop stress: {o.projected_band} (Open-Meteo forecast model, "
+            f"issued {o.issued}; skill scored publicly as windows close).")
     return " ".join(parts)
 
 
@@ -404,6 +432,18 @@ def render_api_latest(s: MonitorState, brief: str) -> str:
             "as_of": s.farm_gate_asof,
             "note": "futures-equivalent VND/kg, before local basis",
         } if s.farm_gate_line else None),
+        "forecast": ({
+            "source": "Open-Meteo forecast model",
+            "issued": s.outlook.issued,
+            "window": [s.outlook.window_start, s.outlook.window_end],
+            "expected_rain_mm": round(s.outlook.expected_mm, 1),
+            "seasonal_norm_mm": round(s.outlook.norm_mm, 1),
+            "anom_z": round(s.outlook.anom_z, 2),
+            "projected_stress": round(s.outlook.projected_stress, 3),
+            "projected_band": s.outlook.projected_band,
+            "note": ("forward-looking model output; verified against realized "
+                     "rainfall in the public track record as windows close"),
+        } if s.outlook is not None else None),
         "fx": {
             "brl_usd_chg_21d": round(s.brl_chg_21d, 5)
             if s.brl_chg_21d is not None else None,
@@ -505,6 +545,45 @@ def render_brazil_section(brazil_asof: str) -> str:
     threshold on daily minimum temperature. Most of the specialty trade buys
     arabica, so this panel pairs with the benchmark price above.</figcaption>
   </figure>
+</section>
+"""
+
+
+def chart_forecast(outlook, fc_frame: pd.DataFrame, out: Path):
+    """Daily forecast rainfall bars with the seasonal-norm daily average."""
+    days = fc_frame["rain_mm"].iloc[:14]
+    fig, ax = plt.subplots(figsize=(9.6, 3.2))
+    ax.bar(days.index, days.values, width=0.7, color=BLUE,
+           label="forecast rain (mm/day)")
+    ax.axhline(outlook.norm_mm / 14.0, color=YELLOW, lw=1.4, ls="--",
+               label="seasonal norm (daily avg)")
+    ax.set_ylabel("mm/day")
+    ax.legend(loc="upper left", fontsize=8.5)
+    ax.xaxis.set_major_formatter(
+        mdates.ConciseDateFormatter(mdates.AutoDateLocator()))
+    _save(fig, out)
+
+
+def render_forecast_section(outlook, has_chart: bool) -> str:
+    o = outlook
+    chart_html = ('<figure><img src="assets/forecast.png" '
+                  'alt="14-day rainfall forecast vs seasonal norm"></figure>'
+                  if has_chart else "")
+    return f"""
+<section>
+  <h2>The next two weeks</h2>
+  <p class="asof">Open-Meteo forecast model · issued {o.issued} ·
+  window {o.window_start} → {o.window_end} · crop stage: {o.stage_label}</p>
+  <p class="asof"><strong style="color:var(--ink)">{o.expected_mm:.0f} mm
+  expected vs {o.norm_mm:.0f} mm seasonal norm ({o.anom_z:+.1f}σ) —
+  projected stress: {o.projected_band}</strong></p>
+  {chart_html}
+  <figcaption style="color:var(--muted);font-size:13.5px;max-width:720px">
+  The only forward-looking panel on this page — and therefore the one that
+  gets scored. Every issued forecast is committed to an append-only ledger
+  before the outcome is known and verified against realized rainfall once the
+  window closes (see the track record below). Until enough windows close,
+  treat this as an unverified model output, not a fact.</figcaption>
 </section>
 """
 
@@ -611,6 +690,13 @@ def daily_brief_vi(s: MonitorState) -> str:
             parts.append(
                 f"Đồng real Brazil ít thay đổi trong tháng "
                 f"({s.brl_chg_21d:+.1%}), bối cảnh tiền tệ trung tính.")
+    if s.outlook is not None:
+        o = s.outlook
+        parts.append(
+            f"Dự báo 14 ngày tới: khoảng {o.expected_mm:.0f} mm mưa so với "
+            f"mức trung bình mùa vụ {o.norm_mm:.0f} mm ({o.anom_z:+.1f}σ) — "
+            f"mức căng thẳng dự kiến cho cây: "
+            f"{STRESS_VI.get(o.projected_band, o.projected_band)}.")
     return " ".join(parts)
 
 
@@ -827,7 +913,8 @@ def chart_brl(s: MonitorState, out: Path, lookback_days: int = 730):
 # ── page ────────────────────────────────────────────────────────────────────
 
 def render_html(s: MonitorState, brief: str, ledger_html: str = "",
-                long_view_html: str = "", brazil_html: str = "") -> str:
+                long_view_html: str = "", brazil_html: str = "",
+                forecast_html: str = "") -> str:
     p = s.posture
     accent = "#" + p.posture_color
     updated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -975,6 +1062,8 @@ def render_html(s: MonitorState, brief: str, ledger_html: str = "",
   </figure>
 </section>
 
+{forecast_html}
+
 {brazil_html}
 
 <section>
@@ -1119,8 +1208,21 @@ def build(out_dir: Path = DEFAULT_OUT) -> Path:
     except Exception as exc:
         log.warning("Brazil panel skipped: %s", exc)
 
+    # forward look — optional layer, never publish-blocking
+    forecast_html = ""
+    if state.outlook is not None:
+        try:
+            from ascentagri.agronomy.forecast import load_forecast
+            fc_frame, _ = load_forecast()
+            chart_forecast(state.outlook, fc_frame, assets / "forecast.png")
+            forecast_html = render_forecast_section(state.outlook, True)
+        except Exception as exc:
+            log.warning("forecast chart skipped: %s", exc)
+            forecast_html = render_forecast_section(state.outlook, False)
+
     (out_dir / "index.html").write_text(render_html(
-        state, brief, ledger_html, long_view_html, brazil_html))
+        state, brief, ledger_html, long_view_html, brazil_html,
+        forecast_html=forecast_html))
     (out_dir / ".nojekyll").write_text("")
 
     vi_dir = out_dir / "vi"

@@ -188,6 +188,60 @@ def test_posture_is_known_value(built):
                 "uncertain", "neutral"])
 
 
+def _stub_outlook(band="elevated", z=-2.1):
+    class O:
+        issued = "2026-07-06"
+        window_start = "2026-07-06"
+        window_end = "2026-07-19"
+        expected_mm = 38.0
+        norm_mm = 92.0
+        std_mm = 25.0
+        anom_z = z
+        drought_w = 0.5
+        wetness_w = 0.1
+        stage_label = "fruit filling"
+        projected_stress = 1.05
+        projected_band = band
+    return O()
+
+
+def test_forecast_section_renders_honestly():
+    html = build_site.render_forecast_section(_stub_outlook(), has_chart=False)
+    for required in ["The next two weeks", "38", "92", "Open-Meteo",
+                     "2026-07-06", "fruit filling", "elevated"]:
+        assert required in html, f"missing: {required!r}"
+
+
+def test_brief_includes_forward_look():
+    class P:
+        posture = "defensive"
+        risk_multiplier = 0.65
+    base = dict(close=None, signals=None, feature_panel=None, brl=None,
+                weather=None, posture=P(), label="stressed", dwell=7,
+                price=250.0, chg_1w=-0.02, chg_1m=0.05,
+                price_asof="", weather_asof="", brl_asof="",
+                rain_z=0.1, dry_frac=0.5, brl_chg_21d=0.001)
+    with_fc = build_site.MonitorState(**base, outlook=_stub_outlook())
+    without = build_site.MonitorState(**base)
+    b_with = build_site.daily_brief(with_fc)
+    b_without = build_site.daily_brief(without)
+    assert "Looking ahead" in b_with and "38" in b_with
+    assert "Looking ahead" not in b_without
+    vi = build_site.daily_brief_vi(with_fc)
+    assert "14 ngày" in vi
+
+
+def test_api_latest_has_forecast_key(built):
+    import json
+    latest = json.loads((built / "api" / "latest.json").read_text())
+    assert "forecast" in latest            # object when cache present, else null
+    if latest["forecast"] is not None:
+        f = latest["forecast"]
+        assert f["source"] == "Open-Meteo forecast model"
+        assert f["projected_band"] in {"low", "watch", "elevated", "severe"}
+        assert "issued" in f and "expected_rain_mm" in f
+
+
 def test_daily_brief_templates():
     """Brief must adapt to dry vs wet vs neutral and BRL direction."""
     class P:  # minimal posture stub
