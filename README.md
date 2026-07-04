@@ -27,6 +27,16 @@ shading, Central Highlands rainfall anomalies, and the BRL/USD driver.
   until then the snippet is a harmless no-op.
 - Feedback from users arrives as GitHub Issues (footer link on the page);
   daily briefs are also available as an RSS feed (`feed.xml`).
+- Forward look: a 14-day rainfall outlook for the robusta belt (Open-Meteo
+  forecast × the crop phenology calendar). Every issued forecast is committed
+  to an append-only snapshot ledger (`data/ledger/weather_forecasts.jsonl`)
+  before the outcome is known and scored against realized rainfall once the
+  window closes — skill vs climatology, published whatever it says
+  (`python -m ascentagri.agronomy.forecast score` reproduces it).
+- Machine surfaces for adopters: `api/latest.json` (now with the `forecast`
+  block), `api/changes.json` + `alerts.xml` (fire only on regime/stress-band
+  changes — poll on your schedule), and `brief/latest.html` (the week on one
+  printable page, archived by date on Fridays).
 
 ## Research
 
@@ -133,6 +143,9 @@ ascentagri/
     validate.py / build_series.py             load raw CSVs, ratio roll-adjustment,
     databento_fetch.py / vendor_fetch.py      diagnostics, fetchers
   macro_fetch.py      BRL/USD (FRED→Yahoo fallback) + Open-Meteo weather caches
+  agronomy/           phenology calendar + stage-weighted stress, farm-gate
+                        economics, forecast.py (14-day outlook, snapshot
+                        ledger, verification vs climatology)
   config.py           one dataclass of coffee-tuned knobs (AgriConfig)
   types.py            AgentOutput — standardized strategy-run record
   regime/             features (price + BRL + weather anomalies), HMM/Markov model,

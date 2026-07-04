@@ -37,13 +37,18 @@ jobs:
           python -m ascentagri.vendor_fetch
           python -m ascentagri.macro_fetch --force
 
+      - name: Fetch 16-day forecast (optional — never publish-blocking)
+        run: |
+          python -m ascentagri.agronomy.forecast fetch \
+            || echo "::warning::forecast fetch failed — site builds without the forward outlook"
+
       - name: Append today's ledger entry and commit to main
         run: |
           python -m ascentagri.ledger append
           python -m ascentagri.ledger score
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ledger/forecasts.jsonl
+          git add data/ledger/forecasts.jsonl data/ledger/weather_forecasts.jsonl
           if ! git diff --cached --quiet; then
             git commit -m "ledger: $(date -u +%F)"
             git pull --rebase origin main
@@ -60,6 +65,11 @@ jobs:
           test -s site/_build/assets/weather.png
           test -s site/_build/assets/brl.png
           grep -q "Robusta Coffee Monitor" site/_build/index.html
+          test -s site/_build/api/changes.json
+          test -s site/_build/alerts.xml
+          test -s site/_build/brief/latest.html
+          grep -q "This week in one page" site/_build/brief/latest.html
+          python -c "import json; json.load(open('site/_build/api/changes.json'))"
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4

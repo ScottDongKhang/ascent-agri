@@ -9,8 +9,14 @@ What exists today (all live, all verified):
   a-priori event study, permutation inference, placebo controls, and two
   honest headline findings (correctly-signed but underpowered Brazil-dry
   effect; the 2021 frost exposing event-definition risk).
-- **Engineering depth** — 133 tests, causal features throughout, fail-safe
+- **Engineering depth** — 180+ tests, causal features throughout, fail-safe
   publishing, honest negative-WFE backtest, full reproduction commands.
+- **Forward look + scored forecasts** — 14-day robusta-belt rainfall outlook
+  with an append-only snapshot ledger; verification vs climatology appears on
+  the site automatically as windows close (first table ~5 closed windows in).
+- **Adoption surfaces** — `api/changes.json`, `alerts.xml` (fire-on-change),
+  and the printable weekly one-pager at `brief/latest.html` — these are what
+  the OUTREACH.md playbook points organizations at.
 
 The gap between this and a finished application is **things only Scott can
 do**. Dated critical path below. Automated pieces keep running on their own.
