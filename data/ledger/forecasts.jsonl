@@ -13,3 +13,4 @@
 {"close": 323.5, "date": "2026-07-20", "exposure": 0.0282, "label": "euphoric", "risk_multiplier": 0.765, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
 {"close": 322.8, "date": "2026-07-21", "exposure": 0.0264, "label": "euphoric", "risk_multiplier": 0.765, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
 {"close": 318.05, "date": "2026-07-22", "exposure": 0.031, "label": "calm_bull", "risk_multiplier": 0.9, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
+{"close": 310.75, "date": "2026-07-23", "exposure": 0.0097, "label": "euphoric", "risk_multiplier": 0.765, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
