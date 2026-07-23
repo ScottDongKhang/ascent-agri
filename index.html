@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robusta Coffee Monitor — regimes, weather, and the Vietnamese crop</title>
+<meta name="description" content="A daily, model-driven read on coffee markets and Vietnamese robusta growing conditions: market regime, Central Highlands rainfall anomalies, and the Brazilian real.">
+<meta property="og:title" content="Robusta Coffee Monitor">
+<meta property="og:description" content="Daily market regime, Central Highlands weather anomalies, and currency pressure — an open agricultural market-intelligence project.">
+<link rel="alternate" type="application/rss+xml" title="Robusta Coffee Monitor — daily brief" href="feed.xml">
+<style>
+  :root {
+    --bg: #141413; --surface: #1a1a19; --ink: #e8e6dd; --muted: #9a9890;
+    --hairline: #2c2c2a; --accent: #84cc16;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px 96px; }
+  header { padding: 56px 0 28px; border-bottom: 1px solid var(--hairline); }
+  .kicker {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif; font-weight: 500;
+    font-size: 34px; line-height: 1.2; margin-top: 10px;
+  }
+  .sub { color: var(--muted); margin-top: 10px; max-width: 620px; }
+  .hero {
+    margin: 36px 0; padding: 28px; background: var(--surface);
+    border: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+  }
+  .posture {
+    font-family: Georgia, serif; font-size: 26px; text-transform: capitalize;
+  }
+  .posture small { color: var(--muted); font-size: 15px; font-family: inherit; }
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; }
+  .stat .k { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+             color: var(--muted); }
+  .stat .v { font-size: 19px; margin-top: 2px; }
+  .brief { margin-top: 20px; color: var(--ink); max-width: 720px; }
+  section { margin-top: 56px; }
+  h2 {
+    font-family: Georgia, serif; font-weight: 500; font-size: 22px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--hairline);
+  }
+  .asof { color: var(--muted); font-size: 13px; margin: 8px 0 16px; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--hairline); }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 10px;
+               max-width: 720px; }
+  .methods p, .methods li { color: var(--muted); font-size: 15px; }
+  .methods ul { margin: 12px 0 0 20px; }
+  .methods a, footer a { color: var(--ink); text-decoration-color: var(--muted); }
+  footer {
+    margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--hairline);
+    color: var(--muted); font-size: 13.5px;
+  }
+  footer p { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div style="float:right;font-size:13px;color:var(--muted)">English ·
+    <a href="vi/" style="color:var(--ink);text-decoration-color:var(--muted)">Tiếng Việt</a></div>
+  <div class="kicker">ascent-agri · daily agricultural market intelligence</div>
+  <h1>Robusta Coffee Monitor</h1>
+  <p class="sub">A model-driven read on coffee markets and the Vietnamese crop:
+  market regime from a hidden-Markov engine, rainfall anomalies in the Central
+  Highlands robusta belt, and producer-currency pressure from the Brazilian
+  real. Rebuilt daily; everything open source.</p>
+</header>
+
+<div class="hero">
+  <div class="posture">selective
+    <small>· regime: late-cycle · 13 sessions ·
+    exposure guide ×0.85</small>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="k">Coffee (benchmark)</div>
+      <div class="v">311¢/lb</div></div>
+    <div class="stat"><div class="k">1 week</div>
+      <div class="v">-3.3%</div></div>
+    <div class="stat"><div class="k">1 month</div>
+      <div class="v">+7.9%</div></div>
+    <div class="stat"><div class="k">Highlands rainfall</div>
+      <div class="v">+0.3σ vs seasonal norm</div></div>
+    <div class="stat"><div class="k">BRL / USD</div>
+      <div class="v">-2.1% over the past month</div></div>
+  </div>
+  <p class="brief">Coffee futures closed at 311¢/lb — down 3.3% on the week and up 7.9% on the month. The regime model reads the market as late-cycle (selective posture) and has for 13 sessions. Growing conditions look unremarkable: Central Highlands rainfall is near its seasonal norm (+0.3σ). The crop is in its fruit filling window, and stage-weighted stress is low. A strengthening Brazilian real (-2.1% in a month) squeezes producer margins — supportive for prices. Looking ahead: the 14-day forecast calls for 176 mm of rain in the robusta belt against a 137 mm seasonal norm (+0.6σ) — projected crop stress: low (Open-Meteo forecast model, issued 2026-07-23; skill scored publicly as windows close).</p>
+</div>
+
+<section>
+  <h2>Market regime</h2>
+  <p class="asof">price data through 2026-07-23</p>
+  <figure>
+    <img src="assets/price_regime.png" alt="Coffee futures price with regime shading">
+    <figcaption>Coffee futures (ICE arabica KC=F — the compliant daily
+    benchmark; the hand-built roll-adjusted robusta series joins the page as
+    contract history is assembled). Shading is the regime engine's smoothed
+    state: a 3-state Gaussian HMM over price, currency and weather features,
+    with asymmetric hysteresis so defensive transitions trigger faster than
+    upgrades.</figcaption>
+  </figure>
+</section>
+
+
+<section>
+  <h2>The long view</h2>
+  <p class="asof">full price history through 2026-07-23</p>
+  <figure>
+    <img src="assets/long_view.png" alt="Full coffee price history with 200-day average">
+    <figcaption>The market most of the trade actually discusses: price
+    against its 200-day average, full history. Green-coffee buyers hedge and
+    reprice off moves like these, not intraday noise — this view exists
+    because an importer's education team told us that's the horizon they
+    teach.</figcaption>
+  </figure>
+</section>
+
+
+<section>
+  <h2>Growing conditions — Central Highlands, Vietnam</h2>
+  <p class="asof">weather data through 2026-07-17 · Buon Ma Thuot, Dak Lak
+  (12.68 N, 108.04 E) · 3% of the last 30 days near-rainless</p>
+  <p class="asof"><strong style="color:var(--ink)">crop stage:
+  fruit filling</strong> · stage-weighted stress: low (0.03)
+  — peak monsoon: moisture normally ample, so a deficit is unusual but damaging</p>
+  
+  <figure>
+    <img src="assets/weather.png" alt="Rainfall anomaly and dry-spell intensity at Buon Ma Thuot">
+    <figcaption>Vietnam grows most of the world's robusta, and most of that in
+    the Central Highlands. Each series is compared only to its own trailing
+    year, so the anomaly is seasonal-aware and fully causal — and the stress
+    read is phenology-weighted: the same rainfall deficit matters far more
+    during dry-season flowering (Jan–Mar), when a failed blossom cannot be
+    recovered, than during harvest (Oct–Dec), when wetness, not drought, is
+    the risk. Persistent dry anomalies here have preceded the major robusta
+    squeezes.</figcaption>
+  </figure>
+</section>
+
+
+<section>
+  <h2>The next two weeks</h2>
+  <p class="asof">Open-Meteo forecast model · issued 2026-07-23 ·
+  window 2026-07-23 → 2026-08-05 · crop stage: fruit filling</p>
+  <p class="asof"><strong style="color:var(--ink)">176 mm
+  expected vs 137 mm seasonal norm (+0.6σ) —
+  projected stress: low</strong></p>
+  <figure><img src="assets/forecast.png" alt="14-day rainfall forecast vs seasonal norm"></figure>
+  <figcaption style="color:var(--muted);font-size:13.5px;max-width:720px">
+  The only forward-looking panel on this page — and therefore the one that
+  gets scored. Every issued forecast is committed to an append-only ledger
+  before the outcome is known and verified against realized rainfall once the
+  window closes (see the track record below). Until enough windows close,
+  treat this as an unverified model output, not a fact.</figcaption>
+</section>
+
+
+
+<section>
+  <h2>Growing conditions — Sul de Minas, Brazil</h2>
+  <p class="asof">weather data through 2026-07-17 · Varginha, Minas Gerais
+  (−21.55, −45.43) · the arabica side of the market</p>
+  <figure>
+    <img src="assets/brazil.png" alt="Rainfall anomaly and minimum temperature at Varginha, Sul de Minas">
+    <figcaption>Brazil dominates arabica, and Sul de Minas is its largest
+    belt. Two risks matter here: dry spells (the same anomaly logic as the
+    Vietnam panel) and winter frost — the dashed line marks the frost-risk
+    threshold on daily minimum temperature. Most of the specialty trade buys
+    arabica, so this panel pairs with the benchmark price above.</figcaption>
+  </figure>
+</section>
+
+
+<section>
+  <h2>Currency driver — the Brazilian real</h2>
+  <p class="asof">FX data through 2026-07-23</p>
+  <figure>
+    <img src="assets/brl.png" alt="BRL per USD">
+    <figcaption>Brazil is the largest coffee producer; growers sell dollars
+    and spend reais. A weakening real raises local-currency revenue per bag
+    and historically adds selling pressure to world prices — one of the
+    regime model's inputs.</figcaption>
+  </figure>
+</section>
+
+
+<section class="methods">
+  <h2>The ledger — the model in public</h2>
+  <p>Every weekday the pipeline writes down what the model believes —
+  regime call and target exposure — <em>before</em> the outcome is known,
+  and commits it to the repository. Entries are never edited or deleted;
+  scoring uses only the prices recorded in the ledger itself, with a 1-day
+  execution delay. If the model is wrong, this section says so forever.</p>
+  <p class="asof">16 entries · 14 scored days (2026-06-25 → 2026-07-23) · model -0.02% vs buy-and-hold -0.03% · mean exposure 0.04</p><figure><img src="assets/ledger.png" alt="Ledger track record vs buy and hold"></figure>
+  <h3 style="margin-top:24px;font-size:16px">Forecast verification</h3><p class="asof">16 rainfall forecasts issued and committed; 1 windows closed. First scored table appears after 5 closed windows. <a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/weather_forecasts.jsonl">Inspect the raw snapshots</a>.</p>
+  <ul><li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">Inspect the raw ledger on GitHub</a></li></ul>
+</section>
+
+
+<section class="methods" id="data">
+  <h2>Data &amp; API</h2>
+  <p>Organizations and builders can consume this monitor programmatically —
+  everything below is regenerated with each daily run, versioned, and free
+  under CC BY 4.0 (attribution required). Derived series only: regime labels,
+  risk multipliers and weather anomalies computed by this project.</p>
+  <ul>
+    <li><a href="api/latest.json"><code>api/latest.json</code></a> — today's
+        regime, posture, exposure guide, growing-condition anomalies, and the
+        daily brief (stable schema, versioned).</li>
+    <li><a href="api/history.csv"><code>api/history.csv</code></a> — the full
+        daily history of regime labels, risk multipliers and rainfall
+        anomalies.</li>
+    <li><a href="feed.xml"><code>feed.xml</code></a> — the daily brief as RSS.</li>
+    <li><a href="api/changes.json"><code>api/changes.json</code></a> — state
+        <em>changes</em> only (regime flips, stress-band crossings) — poll
+        this on your schedule instead of scraping the page.</li>
+    <li><a href="alerts.xml"><code>alerts.xml</code></a> — the same changes as
+        an RSS feed: fires only when something moved (pairs well with any
+        RSS-to-email bridge).</li>
+    <li><a href="brief/latest.html"><code>brief/latest.html</code></a> — the
+        week on one printable page (Cmd/Ctrl+P → PDF); Friday editions are
+        archived by date.</li>
+    <li><a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/data/ledger/forecasts.jsonl">the
+        public ledger</a> — the model's append-only, scoreable track record.</li>
+  </ul>
+  <p>Using this in your shop or newsletter? <a
+  href="https://github.com/ScottDongKhang/ascent-agri/issues">Open an issue</a>
+  or email — custom growing regions can be added on request.</p>
+</section>
+
+<section class="methods">
+  <h2>Research</h2>
+  <p>The question behind this page — <em>do growing-region weather anomalies
+  actually predict coffee futures returns?</em> — is tested properly in the
+  project's working paper: an event study with a-priori definitions,
+  permutation inference, and a built-in placebo structure (each region's
+  weather vs the <em>other</em> region's crop). Headline: Brazilian dry
+  spells precede arabica rallies with the right sign at every horizon
+  (+5.1pp over 5 days, n=4, uncorrected p=0.04); the placebo is null; the
+  Vietnam→robusta test is still data-limited — and the famous 2021 frost
+  exposed a real flaw in threshold-based event definitions.</p>
+  <ul>
+    <li><a href="assets/weather-and-coffee-returns.pdf">Read the paper
+        (PDF)</a> · <a href="https://github.com/ScottDongKhang/ascent-agri/blob/main/docs/research/weather-and-coffee-returns.md">markdown
+        + reproduction commands</a></li>
+  </ul>
+</section>
+
+<section class="methods">
+  <h2>Methods, honestly</h2>
+  <p>This monitor is the public face of an open research project: a
+  single-instrument port of a multi-agent equity platform, rebuilt for
+  agricultural markets.</p>
+  <ul>
+    <li>Regime: 3-state Gaussian HMM on trailing price, BRL/USD and weather
+        features; entropy filter, asymmetric hysteresis, and a rule-based
+        crisis override.</li>
+    <li>Weather: Open-Meteo daily observations at Buon Ma Thuot, z-scored
+        against their own trailing year (causal — no future data).</li>
+    <li>Everything above is descriptive. The project's own walk-forward
+        backtest of a trading strategy on these signals is deliberately
+        published with its unflattering result (negative walk-forward
+        efficiency) — the point is evaluation machinery that makes lying to
+        yourself hard.</li>
+    <li>Code, tests (120), and the full backtest notebook:
+        <a href="https://github.com/ScottDongKhang/ascent-agri">github.com/ScottDongKhang/ascent-agri</a>.</li>
+  </ul>
+</section>
+
+<footer>
+  <p><strong style="color:var(--ink)">Data</strong> — prices: Yahoo Finance
+  (KC=F, BRL=X) · weather: Open-Meteo · regime &amp; anomalies: computed by
+  this project. Panels carry their own as-of dates; the page rebuilds only
+  after a fully successful data refresh, so it can go stale but not wrong.</p>
+  <p><strong style="color:var(--ink)">This is not investment advice.</strong>
+  An educational, open-source agricultural market-intelligence project.
+  Code MIT-licensed; derived data (regime labels, anomalies, briefs)
+  CC BY 4.0 — free to use with attribution.</p>
+  <p>Built by Scott Dong ·
+  <a href="feed.xml">RSS daily brief</a> ·
+  <a href="alerts.xml">alerts feed</a> ·
+  <a href="brief/latest.html">weekly one-pager</a> ·
+  <a href="https://github.com/ScottDongKhang/ascent-agri/issues">suggest a
+  feature or report something wrong</a> · last updated 2026-07-23 22:29 UTC</p>
+</footer>
+
+</div>
+<script data-goatcounter="https://ascent-agri.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

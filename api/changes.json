@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-07-23T22:29:10+00:00",
+  "doc": "State changes only \u2014 poll this instead of scraping the page. Types: regime_change, stress_band_change, projected_stress_band_change. Newest first.",
+  "changes": [
+    {
+      "date": "2026-07-17",
+      "type": "projected_stress_band_change",
+      "from": "watch",
+      "to": "low"
+    },
+    {
+      "date": "2026-07-16",
+      "type": "projected_stress_band_change",
+      "from": "low",
+      "to": "watch"
+    },
+    {
+      "date": "2026-07-15",
+      "type": "projected_stress_band_change",
+      "from": "watch",
+      "to": "low"
+    },
+    {
+      "date": "2026-07-07",
+      "type": "regime_change",
+      "from": "crisis",
+      "to": "euphoric"
+    },
+    {
+      "date": "2026-07-06",
+      "type": "projected_stress_band_change",
+      "from": "low",
+      "to": "watch"
+    },
+    {
+      "date": "2026-05-18",
+      "type": "stress_band_change",
+      "from": "watch",
+      "to": "low"
+    },
+    {
+      "date": "2026-04-01",
+      "type": "stress_band_change",
+      "from": "elevated",
+      "to": "watch"
+    },
+    {
+      "date": "2026-01-02",
+      "type": "stress_band_change",
+      "from": "low",
+      "to": "elevated"
+    },
+    {
+      "date": "2025-12-23",
+      "type": "regime_change",
+      "from": "calm_bull",
+      "to": "crisis"
+    },
+    {
+      "date": "2025-12-09",
+      "type": "regime_change",
+      "from": "euphoric",
+      "to": "calm_bull"
+    },
+    {
+      "date": "2025-12-08",
+      "type": "stress_band_change",
+      "from": "watch",
+      "to": "low"
+    },
+    {
+      "date": "2025-12-01",
+      "type": "stress_band_change",
+      "from": "elevated",
+      "to": "watch"
+    },
+    {
+      "date": "2025-11-06",
+      "type": "stress_band_change",
+      "from": "watch",
+      "to": "elevated"
+    },
+    {
+      "date": "2025-10-27",
+      "type": "stress_band_change",
+      "from": "low",
+      "to": "watch"
+    },
+    {
+      "date": "2025-10-23",
+      "type": "stress_band_change",
+      "from": "watch",
+      "to": "low"
+    },
+    {
+      "date": "2025-10-20",
+      "type": "stress_band_change",
+      "from": "elevated",
+      "to": "watch"
+    },
+    {
+      "date": "2025-10-01",
+      "type": "stress_band_change",
+      "from": "low",
+      "to": "elevated"
+    },
+    {
+      "date": "2025-09-24",
+      "type": "regime_change",
+      "from": "crisis",
+      "to": "euphoric"
+    },
+    {
+      "date": "2025-09-19",
+      "type": "regime_change",
+      "from": "euphoric",
+      "to": "crisis"
+    },
+    {
+      "date": "2025-08-21",
+      "type": "regime_change",
+      "from": "crisis",
+      "to": "euphoric"
+    }
+  ],
+  "attribution": "Regime labels, risk multipliers and anomalies computed by ascent-agri (github.com/ScottDongKhang/ascent-agri). Underlying inputs: Yahoo Finance, Open-Meteo (CC BY 4.0).",
+  "license": "CC BY 4.0 (derived data); attribution required"
+}

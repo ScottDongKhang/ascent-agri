@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-07-23T22:29:10+00:00",
+  "as_of": {
+    "price": "2026-07-23",
+    "weather": "2026-07-17",
+    "fx": "2026-07-23"
+  },
+  "regime": {
+    "label": "euphoric",
+    "posture": "selective",
+    "risk_multiplier": 0.85,
+    "sessions_in_regime": 13
+  },
+  "market": {
+    "chg_1w": -0.03284,
+    "chg_1m": 0.07918,
+    "series": "ICE arabica benchmark (robusta series in assembly)"
+  },
+  "growing_conditions": {
+    "location": "Buon Ma Thuot, Dak Lak, Vietnam (12.68N, 108.04E)",
+    "rain_anom_30d_z": 0.31,
+    "dry_frac_30d": 0.033
+  },
+  "crop": {
+    "stage": "fruit filling",
+    "stage_note": "peak monsoon: moisture normally ample, so a deficit is unusual but damaging",
+    "stress_index": 0.031,
+    "stress_band": "low",
+    "method": "30-day rainfall anomaly weighted by the Dak Lak robusta phenology calendar (drought-sensitive flowering/fruit-set, wetness-sensitive harvest)"
+  },
+  "farm_gate": null,
+  "forecast": {
+    "source": "Open-Meteo forecast model",
+    "issued": "2026-07-23",
+    "window": [
+      "2026-07-23",
+      "2026-08-05"
+    ],
+    "expected_rain_mm": 176.0,
+    "seasonal_norm_mm": 136.8,
+    "anom_z": 0.63,
+    "projected_stress": 0.063,
+    "projected_band": "low",
+    "note": "forward-looking model output; verified against realized rainfall in the public track record as windows close"
+  },
+  "fx": {
+    "brl_usd_chg_21d": -0.02062
+  },
+  "brief": "Coffee futures closed at 311\u00a2/lb \u2014 down 3.3% on the week and up 7.9% on the month. The regime model reads the market as late-cycle (selective posture) and has for 13 sessions. Growing conditions look unremarkable: Central Highlands rainfall is near its seasonal norm (+0.3\u03c3). The crop is in its fruit filling window, and stage-weighted stress is low. A strengthening Brazilian real (-2.1% in a month) squeezes producer margins \u2014 supportive for prices. Looking ahead: the 14-day forecast calls for 176 mm of rain in the robusta belt against a 137 mm seasonal norm (+0.6\u03c3) \u2014 projected crop stress: low (Open-Meteo forecast model, issued 2026-07-23; skill scored publicly as windows close).",
+  "attribution": "Regime labels, risk multipliers and anomalies computed by ascent-agri (github.com/ScottDongKhang/ascent-agri). Underlying inputs: Yahoo Finance, Open-Meteo (CC BY 4.0).",
+  "license": "CC BY 4.0 (derived data); attribution required",
+  "docs": "https://scottdongkhang.github.io/ascent-agri/#data"
+}

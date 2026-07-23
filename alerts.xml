@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Robusta Coffee Monitor — alerts</title>
+    <link>https://scottdongkhang.github.io/ascent-agri/</link>
+    <description>Fires only when the regime or crop-stress state changes.</description>
+    <lastBuildDate>Thu, 23 Jul 2026 22:29:10 +0000</lastBuildDate>
+    <item>
+      <title>projected stress band change: watch → low (2026-07-17)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-projected_stress_band_change-2026-07-17</guid>
+      <pubDate>Fri, 17 Jul 2026 21:30:00 +0000</pubDate>
+      <description>projected stress band change: watch → low (2026-07-17)</description>
+    </item>
+    <item>
+      <title>projected stress band change: low → watch (2026-07-16)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-projected_stress_band_change-2026-07-16</guid>
+      <pubDate>Thu, 16 Jul 2026 21:30:00 +0000</pubDate>
+      <description>projected stress band change: low → watch (2026-07-16)</description>
+    </item>
+    <item>
+      <title>projected stress band change: watch → low (2026-07-15)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-projected_stress_band_change-2026-07-15</guid>
+      <pubDate>Wed, 15 Jul 2026 21:30:00 +0000</pubDate>
+      <description>projected stress band change: watch → low (2026-07-15)</description>
+    </item>
+    <item>
+      <title>regime change: crisis → euphoric (2026-07-07)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2026-07-07</guid>
+      <pubDate>Tue, 07 Jul 2026 21:30:00 +0000</pubDate>
+      <description>regime change: crisis → euphoric (2026-07-07)</description>
+    </item>
+    <item>
+      <title>projected stress band change: low → watch (2026-07-06)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-projected_stress_band_change-2026-07-06</guid>
+      <pubDate>Mon, 06 Jul 2026 21:30:00 +0000</pubDate>
+      <description>projected stress band change: low → watch (2026-07-06)</description>
+    </item>
+    <item>
+      <title>stress band change: watch → low (2026-05-18)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2026-05-18</guid>
+      <pubDate>Mon, 18 May 2026 21:30:00 +0000</pubDate>
+      <description>stress band change: watch → low (2026-05-18)</description>
+    </item>
+    <item>
+      <title>stress band change: elevated → watch (2026-04-01)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2026-04-01</guid>
+      <pubDate>Wed, 01 Apr 2026 21:30:00 +0000</pubDate>
+      <description>stress band change: elevated → watch (2026-04-01)</description>
+    </item>
+    <item>
+      <title>stress band change: low → elevated (2026-01-02)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2026-01-02</guid>
+      <pubDate>Fri, 02 Jan 2026 21:30:00 +0000</pubDate>
+      <description>stress band change: low → elevated (2026-01-02)</description>
+    </item>
+    <item>
+      <title>regime change: calm_bull → crisis (2025-12-23)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2025-12-23</guid>
+      <pubDate>Tue, 23 Dec 2025 21:30:00 +0000</pubDate>
+      <description>regime change: calm_bull → crisis (2025-12-23)</description>
+    </item>
+    <item>
+      <title>regime change: euphoric → calm_bull (2025-12-09)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2025-12-09</guid>
+      <pubDate>Tue, 09 Dec 2025 21:30:00 +0000</pubDate>
+      <description>regime change: euphoric → calm_bull (2025-12-09)</description>
+    </item>
+    <item>
+      <title>stress band change: watch → low (2025-12-08)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-12-08</guid>
+      <pubDate>Mon, 08 Dec 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: watch → low (2025-12-08)</description>
+    </item>
+    <item>
+      <title>stress band change: elevated → watch (2025-12-01)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-12-01</guid>
+      <pubDate>Mon, 01 Dec 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: elevated → watch (2025-12-01)</description>
+    </item>
+    <item>
+      <title>stress band change: watch → elevated (2025-11-06)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-11-06</guid>
+      <pubDate>Thu, 06 Nov 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: watch → elevated (2025-11-06)</description>
+    </item>
+    <item>
+      <title>stress band change: low → watch (2025-10-27)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-10-27</guid>
+      <pubDate>Mon, 27 Oct 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: low → watch (2025-10-27)</description>
+    </item>
+    <item>
+      <title>stress band change: watch → low (2025-10-23)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-10-23</guid>
+      <pubDate>Thu, 23 Oct 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: watch → low (2025-10-23)</description>
+    </item>
+    <item>
+      <title>stress band change: elevated → watch (2025-10-20)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-10-20</guid>
+      <pubDate>Mon, 20 Oct 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: elevated → watch (2025-10-20)</description>
+    </item>
+    <item>
+      <title>stress band change: low → elevated (2025-10-01)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-stress_band_change-2025-10-01</guid>
+      <pubDate>Wed, 01 Oct 2025 21:30:00 +0000</pubDate>
+      <description>stress band change: low → elevated (2025-10-01)</description>
+    </item>
+    <item>
+      <title>regime change: crisis → euphoric (2025-09-24)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2025-09-24</guid>
+      <pubDate>Wed, 24 Sep 2025 21:30:00 +0000</pubDate>
+      <description>regime change: crisis → euphoric (2025-09-24)</description>
+    </item>
+    <item>
+      <title>regime change: euphoric → crisis (2025-09-19)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2025-09-19</guid>
+      <pubDate>Fri, 19 Sep 2025 21:30:00 +0000</pubDate>
+      <description>regime change: euphoric → crisis (2025-09-19)</description>
+    </item>
+    <item>
+      <title>regime change: crisis → euphoric (2025-08-21)</title>
+      <link>https://scottdongkhang.github.io/ascent-agri/</link>
+      <guid isPermaLink="false">ascent-agri-alert-regime_change-2025-08-21</guid>
+      <pubDate>Thu, 21 Aug 2025 21:30:00 +0000</pubDate>
+      <description>regime change: crisis → euphoric (2025-08-21)</description>
+    </item>
+  </channel>
+</rss>
