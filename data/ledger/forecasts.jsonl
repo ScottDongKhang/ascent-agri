@@ -101,3 +101,4 @@
 {"close": 274.35, "date": "2026-11-23", "exposure": 0.0, "label": "crisis", "risk_multiplier": 0.36, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
 {"close": 260.4, "date": "2026-11-24", "exposure": 0.025, "label": "crisis", "risk_multiplier": 0.36, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
 {"close": 268.55, "date": "2026-11-25", "exposure": 0.0, "label": "crisis", "risk_multiplier": 0.36, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
+{"close": 275.55, "date": "2026-11-27", "exposure": 0.0, "label": "crisis", "risk_multiplier": 0.36, "schema": 1, "series": "KC=F (arabica benchmark stand-in)"}
